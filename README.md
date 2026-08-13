@@ -1,4 +1,4 @@
-# buzzdetect web
+# buzzdetect live
 
 buzzdetect's `model_general_v3` running in a browser tab, on a SeeNote-style
 spectrogram. Open an audio file, see the spectrogram and the model's activations

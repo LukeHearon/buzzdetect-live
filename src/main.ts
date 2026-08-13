@@ -561,6 +561,7 @@ els.mic.addEventListener('click', async () => {
     await session.start();
 
     els.micLabel.textContent = 'Stop';
+    els.mic.title = 'Stop recording';
     els.mic.classList.add('on');
     els.mic.querySelector('use')?.setAttribute('href', '#i-stop');
     els.liveBadge.hidden = false;
@@ -606,8 +607,9 @@ async function stopLive(): Promise<void> {
   }
 
   els.micLabel.textContent = 'Record';
+  els.mic.title = 'Record from microphone';
   els.mic.classList.remove('on');
-  els.mic.querySelector('use')?.setAttribute('href', '#i-mic');
+  els.mic.querySelector('use')?.setAttribute('href', '#i-record');
   els.liveBadge.hidden = true;
   els.meterFill.style.width = '0%';
   setStatus('');
