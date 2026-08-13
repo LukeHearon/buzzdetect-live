@@ -221,7 +221,29 @@ async function loadFile(file: File): Promise<void> {
 
 // --------------------------------------------------------- interactions ---
 
-let dragging: { startTime: number; moved: boolean; onActs: boolean } | null = null;
+/**
+ * How long the pointer must be held before a drag counts as a selection.
+ *
+ * Without it, the few pixels of travel in an ordinary click land as a tiny
+ * selection, and clicking to seek keeps leaving stray ranges behind. The anchor
+ * is still the point where the button went down, so a deliberate press-and-drag
+ * selects from where it started even though it only became a selection part-way
+ * through -- what you get is what you aimed at, not what was left after the
+ * delay elapsed.
+ */
+const SELECTION_HOLD_MS = 100;
+
+let dragging: {
+  startTime: number;
+  startedAt: number;
+  selecting: boolean;
+  onActs: boolean;
+} | null = null;
+
+/** A drag becomes a selection once it is both old enough and long enough. */
+function selectionBegun(d: NonNullable<typeof dragging>, t: number): boolean {
+  return performance.now() - d.startedAt >= SELECTION_HOLD_MS && Math.abs(t - d.startTime) > 0.002;
+}
 
 for (const area of [els.spec, els.acts]) {
   const onActs = area === els.acts;
@@ -229,7 +251,13 @@ for (const area of [els.spec, els.acts]) {
   area.addEventListener('pointerdown', (e) => {
     if (!hasData()) return;
     area.setPointerCapture(e.pointerId);
-    dragging = { startTime: spec.viewport.xToTime(offsetX(e, area)), moved: false, onActs };
+    const t = spec.viewport.xToTime(offsetX(e, area));
+    dragging = {
+      startTime: t,
+      startedAt: performance.now(),
+      selecting: false,
+      onActs,
+    };
   });
 
   area.addEventListener('pointermove', (e) => {
@@ -240,8 +268,8 @@ for (const area of [els.spec, els.acts]) {
     const t = spec.viewport.xToTime(x);
 
     if (dragging) {
-      if (Math.abs(t - dragging.startTime) > 0.002) dragging.moved = true;
-      if (dragging.moved) {
+      if (selectionBegun(dragging, t)) dragging.selecting = true;
+      if (dragging.selecting) {
         selection = normalizeSelection({ from: dragging.startTime, to: t });
         actsDirty = true;
       }
@@ -251,8 +279,15 @@ for (const area of [els.spec, els.acts]) {
   area.addEventListener('pointerup', (e) => {
     if (!dragging) return;
     const t = spec.viewport.xToTime(offsetX(e, area));
+    // Judged again here: a drag that came to rest before the hold elapsed
+    // sends no further pointermove, so this is the only place left to notice
+    // that it has since become one.
+    if (selectionBegun(dragging, t)) {
+      dragging.selecting = true;
+      selection = normalizeSelection({ from: dragging.startTime, to: t });
+    }
 
-    if (!dragging.moved) {
+    if (!dragging.selecting) {
       if (dragging.onActs && store.filled > 0) {
         // Clicking a frame selects that frame's audio, so the extent the model
         // scored is the extent you hear.
@@ -524,46 +559,31 @@ function drawTimeAxis(): void {
 let lastViewKey = '';
 /** Live only: whether the viewport is pinned to the right edge. */
 let following = true;
-const LIVE_REDRAW_MS = 33;
-let lastLiveDraw = 0;
-let lastScrollDraw = 0;
 
 function frame(): void {
   const vp = spec.viewport;
 
   if (live?.running) {
-    // A scrolling spectrogram is a full repaint, so it runs at ~30 Hz rather
-    // than every frame. At the live scroll rate that is a sub-pixel difference
-    // on screen and half the CPU.
-    const now = performance.now();
-    if (now - lastLiveDraw >= LIVE_REDRAW_MS) {
-      lastLiveDraw = now;
-      vp.duration = live.elapsed;
-      if (following) {
-        // Keep "now" at the right edge; older audio pans off to the left.
-        vp.start = Math.max(0, vp.duration - vp.visibleSeconds);
-      }
-      spec.invalidate();
-      actsDirty = true;
-      els.meterFill.style.width = `${Math.min(100, live.level * 140)}%`;
-      showTime(vp.duration);
+    vp.duration = live.elapsed;
+    if (following) {
+      // Keep "now" at the right edge; older audio pans off to the left.
+      vp.start = Math.max(0, vp.duration - vp.visibleSeconds);
     }
+    spec.invalidate();
+    actsDirty = true;
+    els.meterFill.style.width = `${Math.min(100, live.level * 140)}%`;
+    showTime(vp.duration);
   }
 
   if (player.playing) {
     // Locked to the playhead: it sits in the middle and the audio moves past
     // it, so the view never jumps and never has to be chased.
     //
-    // Scrolling means a full spectrogram repaint, so the view is advanced at
-    // ~30 Hz while the playhead line itself still moves every frame on the
-    // cheap overlay. The difference is imperceptible and it halves the cost of
-    // playing a file.
-    const now = performance.now();
-    if (now - lastScrollDraw >= LIVE_REDRAW_MS) {
-      lastScrollDraw = now;
-      vp.start = player.currentTime - vp.visibleSeconds / 2;
-      vp.clamp();
-    }
+    // Advanced every frame. This used to be throttled because scrolling meant a
+    // full repaint; SpectrogramView now scrolls by blitting what it already
+    // drew, so the display simply runs at whatever rate the machine offers.
+    vp.start = player.currentTime - vp.visibleSeconds / 2;
+    vp.clamp();
     showTime(player.currentTime);
     overlayDirty = true;
   }

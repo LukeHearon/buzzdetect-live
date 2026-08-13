@@ -62,6 +62,10 @@ export class SpectrogramView {
   private bandForRow = new Int32Array(0);
   private dpr = 1;
   private baseDirty = true;
+  /** contentKey() of the image currently on the canvas; '' when there is none. */
+  private drawnKey = '';
+  /** Time at the left edge of that image, which the blit keeps exact. */
+  private drawnStart = 0;
 
   constructor(container: HTMLElement, axis: HTMLCanvasElement) {
     this.base = document.createElement('canvas');
@@ -80,6 +84,7 @@ export class SpectrogramView {
   setData(data: SpectrogramData | null): void {
     this.data = data;
     this.baseDirty = true;
+    this.drawnKey = '';
   }
 
   invalidate(): void {
@@ -119,6 +124,8 @@ export class SpectrogramView {
     this.bandForRow = new Int32Array(h);
     this.viewport.width = cssWidth;
     this.baseDirty = true;
+    // The old image is gone with the old backing store; nothing to scroll from.
+    this.drawnKey = '';
   }
 
   /** Row -> mel band table. Cheap; rebuilt on every base draw. */
@@ -144,24 +151,101 @@ export class SpectrogramView {
     }
   }
 
+  /**
+   * Everything except the view's start position that decides what a pixel is.
+   * Two draws that agree on this differ only by a horizontal shift, which is
+   * what makes the scroll path below safe. `columns` and `startSeconds` are in
+   * here because the live scope mutates its buffer in place -- the object
+   * identity never changes, so watching the object would miss new audio.
+   */
+  private contentKey(): string {
+    const s = this.settings;
+    const d = this.data;
+    return [
+      s.minHz,
+      s.maxHz,
+      s.minByte,
+      s.maxByte,
+      s.colormap,
+      this.base.width,
+      this.base.height,
+      this.viewport.pixelsPerSecond,
+      d ? `${d.columns}|${d.startSeconds}|${d.secondsPerColumn}|${d.binCount}` : 'empty',
+    ].join('|');
+  }
+
   drawBase(): void {
     if (!this.baseDirty) return;
     this.baseDirty = false;
 
     const { base, baseCtx, image, data } = this;
     if (!image) return;
-    this.drawAxis();
 
     if (!data || data.columns === 0) {
+      this.drawAxis();
       baseCtx.fillStyle = '#0b1220';
       baseCtx.fillRect(0, 0, base.width, base.height);
+      this.drawnKey = '';
       return;
     }
 
-    this.updateRowTable();
-
     const w = base.width;
     const h = base.height;
+    const key = this.contentKey();
+    const devicePixelsPerSecond = this.viewport.pixelsPerSecond * this.dpr;
+
+    // Scroll path: the image already on the canvas is still correct, just in
+    // the wrong place. Shifting it and filling in the strip that scrolled into
+    // view costs a blit plus a handful of columns, where a full repaint is
+    // width*height peak-holds -- the difference between comfortably inside a
+    // frame budget and over it. The playhead moves every frame, so this is the
+    // common case during playback and live capture.
+    if (key === this.drawnKey) {
+      // Device pixels the content must move right by. Integer, because a blit
+      // cannot shift by a fraction of a pixel without resampling.
+      const shift = Math.round((this.drawnStart - this.viewport.start) * devicePixelsPerSecond);
+      if (shift === 0) return;
+
+      if (Math.abs(shift) < w) {
+        this.updateRowTable();
+        baseCtx.drawImage(base, shift, 0);
+        // The blit moved by whole pixels, so the image now starts at whatever
+        // time that lands on rather than exactly at viewport.start. Tracking
+        // the real value keeps the error under one pixel forever instead of
+        // letting rounding accumulate over thousands of frames.
+        this.drawnStart -= shift / devicePixelsPerSecond;
+
+        const from = shift > 0 ? 0 : w + shift;
+        const to = shift > 0 ? shift : w;
+        this.renderColumns(from, to, this.drawnStart);
+        // Only the new strip is uploaded; the rest of `image` is stale and
+        // deliberately never read.
+        baseCtx.putImageData(image, 0, 0, from, 0, to - from, h);
+        return;
+      }
+    }
+
+    // Full repaint: something other than the view's position changed, or the
+    // view jumped further than its own width.
+    this.drawAxis();
+    this.updateRowTable();
+    this.renderColumns(0, w, this.viewport.start);
+    baseCtx.putImageData(image, 0, 0);
+    this.drawnKey = key;
+    this.drawnStart = this.viewport.start;
+  }
+
+  /**
+   * Renders device-pixel columns [xFrom, xTo) into the image buffer, with
+   * `imageStart` as the time at x = 0. Split out from drawBase so the scroll
+   * path can fill a strip on exactly the same terms as a full repaint.
+   */
+  private renderColumns(xFrom: number, xTo: number, imageStart: number): void {
+    const { image, data } = this;
+    if (!image || !data) return;
+
+    const w = this.base.width;
+    const h = this.base.height;
     const px = image.data;
     const lut = colormap(this.settings.colormap);
     const levels = levelTable(this.settings.minByte, this.settings.maxByte);
@@ -174,10 +258,10 @@ export class SpectrogramView {
     const stride = Math.max(1, Math.ceil(columnsPerPixel / MAX_COLUMNS_PER_PIXEL));
     const lastColumn = data.columns - 1;
 
-    for (let x = 0; x < w; x++) {
+    for (let x = xFrom; x < xTo; x++) {
       // Columns are indexed from the buffer's own start, which is 0 for a file
       // but walks forward for the live scope as it drops old history.
-      const t = this.viewport.start + x * secondsPerPixel - data.startSeconds;
+      const t = imageStart + x * secondsPerPixel - data.startSeconds;
       let c0 = Math.floor(t / data.secondsPerColumn);
       let c1 = Math.floor((t + secondsPerPixel) / data.secondsPerColumn);
 
@@ -212,8 +296,6 @@ export class SpectrogramView {
         px[o + 2] = lut[idx + 2];
       }
     }
-
-    baseCtx.putImageData(image, 0, 0);
   }
 
   /** Draws the playhead, the selection and the hover cursor. */
