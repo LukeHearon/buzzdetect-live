@@ -452,19 +452,21 @@ for (const area of [els.spec, els.acts]) {
       if (!hasData()) return;
       e.preventDefault();
 
-      // A trackpad's horizontal swipe arrives as deltaX; treat the dominant
-      // axis as the gesture, so a sideways swipe pans and a pinch or vertical
-      // wheel zooms. Shift+wheel pans too, for a mouse with one wheel.
-      const horizontal = Math.abs(e.deltaX) > Math.abs(e.deltaY);
-      if (horizontal || e.shiftKey) {
+      // Scrolling pans; shift+scroll zooms. A trackpad's pinch gesture also
+      // arrives as a wheel event with ctrlKey set, so it zooms too regardless
+      // of shift. A trackpad's horizontal swipe arrives as deltaX -- treat
+      // the dominant axis as the pan direction, so a sideways swipe pans
+      // sideways and a vertical scroll pans along time.
+      if (e.shiftKey || e.ctrlKey) {
+        const factor = Math.exp(-Math.max(-100, Math.min(100, e.deltaY)) * 0.004);
+        spec.viewport.zoomAt(offsetX(e, area), factor, minPixelsPerSecond());
+      } else {
+        const horizontal = Math.abs(e.deltaX) > Math.abs(e.deltaY);
         const delta = horizontal ? e.deltaX : e.deltaY;
         spec.viewport.panBy(delta / spec.viewport.pixelsPerSecond);
         // Panning away from the right edge in live mode stops the auto-follow,
         // so you can look at something while capture continues.
         if (live) following = spec.viewport.end >= spec.viewport.duration - 0.5;
-      } else {
-        const factor = Math.exp(-Math.max(-100, Math.min(100, e.deltaY)) * 0.004);
-        spec.viewport.zoomAt(offsetX(e, area), factor, minPixelsPerSecond());
       }
       spec.invalidate();
       actsDirty = true;
