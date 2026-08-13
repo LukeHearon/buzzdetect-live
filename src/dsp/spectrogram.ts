@@ -94,12 +94,25 @@ export function buildDisplayMelBank(
   const offsets = new Int32Array(bands);
   const rows: number[][] = [];
 
+  // Below ~1 kHz a mel band is narrower than the FFT's bin spacing, so the
+  // naive triangle lands on one bin, on the tail of one bin, or between two and
+  // catches nothing at all -- which draws as horizontal stripes, band by band,
+  // rather than as anything in the audio. Widening every triangle to reach at
+  // least one bin either side of its centre, then normalising any band whose
+  // weights sum to less than one, turns those bands into a linear interpolation
+  // between the two bins they sit between. The picture varies smoothly with
+  // frequency again, at the cost of admitting that the display cannot resolve
+  // detail the STFT never had. Bands wider than a bin are left alone.
+  const binHz = nyquist / (binCount - 1);
+
   for (let j = 0; j < bands; j++) {
-    const lower = edges[j];
+    const centerHz = melToHertz(edges[j + 1]);
+    const lower = Math.min(edges[j], hertzToMel(Math.max(0, centerHz - binHz)));
     const center = edges[j + 1];
-    const upper = edges[j + 2];
+    const upper = Math.max(edges[j + 2], hertzToMel(centerHz + binHz));
     const row: number[] = [];
     let start = -1;
+    let sum = 0;
     for (let i = 0; i < binCount; i++) {
       const w = Math.max(
         0,
@@ -108,15 +121,19 @@ export function buildDisplayMelBank(
       if (w > 0) {
         if (start < 0) start = i;
         row.push(w);
+        sum += w;
       } else if (start >= 0) {
         break; // triangular bands are contiguous
       }
     }
-    // At the low end a band can fall between two FFT bins and pick up nothing;
-    // give it the nearest bin so it renders as signal rather than a black stripe.
     if (row.length === 0) {
-      start = Math.max(0, Math.round((melToHertz(center) / nyquist) * (binCount - 1)));
+      // Unreachable: a triangle spanning the centre plus a bin either side
+      // always contains a bin. Kept so a future edge-case cannot draw a black
+      // stripe instead of failing loudly.
+      start = Math.max(0, Math.round(centerHz / binHz));
       row.push(1);
+    } else if (sum < 1) {
+      for (let k = 0; k < row.length; k++) row[k] /= sum;
     }
     starts[j] = start;
     lengths[j] = row.length;
