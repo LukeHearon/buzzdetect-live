@@ -109,7 +109,7 @@
 
       <h3>Getting audio in</h3>
       <ul>
-        <li>You can ether open an existing audio file (whatever formats your browser supported), or you can record from your microphone.</li>
+        <li>You can ether open an existing audio file (whatever formats your browser supports), or you can record from your microphone.</li>
         <li>Live recording only retains up to five minutes of audio. You can watch the analysis stream in during recording; afterwards, you can browse it like a normal file. </li>
       </ul>
 
@@ -125,16 +125,19 @@
 
       <h3>Panels</h3>
       <ul>
-        <li>The top panel is the spectrogram, a The spectrogram's vertical axis is mel-spaced, matching what the model sees.</li>
-        <li>The slider beside it sets the contrast window; the Hz boxes set the range shown.</li>
+        <li>The top panel is the spectrogram, a visual representation of the audio.</li>
+        <li>The vertical axis is frequency, in Hz. The horizontal axis is time. The color is amplitude (volume). </li>
+        <li>Some files/environments are noisier than others; use the slider to the right of the spectrogram to dial in the color scale.</li>
         <li>
-          Results are the model's raw activations &mdash; unbounded model units, not
-          probabilities. Thresholds are in those same units.
+          The bottom panel shows the buzzdetect results. The vertical axis is activation, 
+          a somewhat abstract representation of the model's confidence that the corresponding event is present in the frame.
+          Each frame is a 0.96s segment of audio that the model analyzes and makes predictions for. 
         </li>
         <li>
-          <strong>Classes</strong> picks which of the thirteen outputs are plotted and sets a
-          threshold for each. Colours group by kind: insects yellow, ambient green,
-          mechanical blue, other animals and people pink.
+          The <strong>Neurons</strong> button lets you pick what neurons you want to plot.
+          Note! We only tune buzzdetect for performance on the ins_buzz neuron, but you may find the others informative.
+          You can set a detection threshold for each - a level above which you want to consider the frame positive for the event in question.
+          Our baseline threshold for the ins_buzz neuron is -1.2
         </li>
       </ul>
 
@@ -144,11 +147,9 @@
     <!-- Class picker. Rows are built in main.ts from the model's own class
          list, so nothing here has to be kept in step with it. -->
     <dialog id="settings-dialog" class="help settings">
-      <h2>Classes</h2>
+      <h2>Neurons</h2>
       <p class="muted small">
-        Which of the model's outputs to plot, and the threshold each is counted against.
-        Thresholds are unbounded model units, not probabilities; buzzdetect's default is
-        &minus;1.20.
+        Pick which neurons you want to plot and set a detection threshold foeach.
       </p>
       <div id="class-list" class="class-list"></div>
       <form method="dialog"><button class="button" type="submit">Done</button></form>
@@ -174,7 +175,7 @@
               min="100"
               step="100"
               value="6000"
-              title="Top of frequency range shown (Hz)"
+              title="Highest frequency to plot (Hz)"
             />
             <input
               id="min-hz"
@@ -183,7 +184,7 @@
               min="0"
               step="100"
               value="0"
-              title="Bottom of frequency range shown (Hz)"
+              title="Lowest frequency to plot (Hz)"
             />
           </div>
           <div id="spec" class="spec"></div>
@@ -193,7 +194,7 @@
                rows carry a spacer of the same width so the time axes stay
                aligned. -->
           <div id="contrast" class="rail" title="Contrast">
-            <canvas id="colorscale" class="colorscale" title="Colour scale, in dB"></canvas>
+            <canvas id="colorscale" class="colorscale" title="Color scale, in dB"></canvas>
           </div>
         </div>
       </section>
@@ -208,9 +209,9 @@
       <!-- buzzdetect results, on the same time axis. -->
       <section class="panel">
         <div class="panel-head">
-          <button id="settings" class="button icon-button" type="button" title="Choose classes to plot">
+          <button id="settings" class="button icon-button" type="button" title="Pick which neurons you want to plot">
             <svg class="icon" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>
-            <span>Classes</span>
+            <span>Neurons</span>
           </button>
           <span class="grow"></span>
           <span id="detection-count" class="mono small muted"></span>
