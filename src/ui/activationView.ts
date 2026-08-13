@@ -4,6 +4,13 @@
  * hollow where it does not, with the frame boundaries hashed in behind and a
  * dashed threshold line in the series colour.
  *
+ * Any subset of the model's thirteen outputs can be plotted at once, each with
+ * its own colour and its own threshold (see ui/series.ts). They share one value
+ * axis, because they are all in the same units and the interesting comparison is
+ * which class is loudest at a moment -- separate axes would make that a
+ * coincidence of scaling. The dashed threshold lines are per series and drawn
+ * behind every polyline, so no line is broken up by another's cutoff.
+ *
  * Values are the model's raw outputs, exactly as buzzdetect writes them to its
  * `activation_*` columns. They are not probabilities and are not squashed to
  * 0..1 -- the head has no softmax or sigmoid -- so the axis stays in the model's
@@ -16,6 +23,7 @@
 
 import { Viewport } from './viewport';
 import { CLASSES } from '../model/session';
+import type { Series } from './series';
 
 /** Vertical breathing room so dots at the extremes are not clipped. */
 const PAD_TOP = 12;
@@ -25,6 +33,11 @@ const MIN_DOT_PX = 5;
 /** Below this, frame boundary hashes crowd into a solid wash. */
 const MIN_BOUNDARY_PX = 6;
 const DOT_RADIUS = 3.5;
+/**
+ * Above this many series, per-frame dots stop helping: the markers of different
+ * classes overlap more often than not, and the lines alone are easier to follow.
+ */
+const MAX_DOT_SERIES = 4;
 /** Panel background; hollow dots are filled with it so the line does not show through. */
 export const PANEL_BG = '#0b1220';
 
@@ -119,7 +132,6 @@ export class ActivationView {
   /** Value axis, in the model's activation units. */
   min = -4;
   max = 2;
-  threshold = -1.2;
 
   constructor(container: HTMLElement, axis: HTMLCanvasElement) {
     this.canvas = document.createElement('canvas');
@@ -152,8 +164,7 @@ export class ActivationView {
 
   draw(
     store: ActivationStore,
-    classIndex: number,
-    color: string,
+    series: readonly Series[],
     viewport: Viewport,
     playhead: number | null,
     selection: { from: number; to: number } | null,
@@ -196,70 +207,78 @@ export class ActivationView {
       ctx.stroke();
     }
 
-    // Threshold, dashed and in the series colour at reduced alpha.
-    const ty = this.yOf(this.threshold);
-    ctx.strokeStyle = `${color}66`;
+    // Every threshold first, so one series' cutoff never lies on top of
+    // another's data. Dashed, in the series colour at reduced alpha.
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    ctx.moveTo(0, ty);
-    ctx.lineTo(this.width, ty);
-    ctx.stroke();
+    for (const s of series) {
+      const ty = this.yOf(s.threshold);
+      ctx.strokeStyle = `${s.color}66`;
+      ctx.beginPath();
+      ctx.moveTo(0, ty);
+      ctx.lineTo(this.width, ty);
+      ctx.stroke();
+    }
     ctx.setLineDash([]);
 
-    // The polyline, one vertex per frame centre when frames are wide enough to
-    // matter, otherwise one per pixel holding that pixel's peak -- a mean would
-    // erase exactly the brief events being looked for.
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
+    // Dots only when frames are wide enough for them to read, and only while
+    // few enough lines are up that they do not pile onto each other.
+    const dots = framePx >= MIN_DOT_PX && series.length <= MAX_DOT_SERIES;
 
-    if (framePx >= 1) {
-      for (let p = first; p <= last; p++) {
-        const x = viewport.timeToX(store.timeOf(p) + hop / 2);
-        const y = this.yOf(store.get(p, classIndex));
-        if (p === first) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-    } else {
-      const secondsPerPixel = 1 / viewport.pixelsPerSecond;
-      let started = false;
-      for (let x = 0; x < this.width; x++) {
-        const p0 = Math.max(first, store.patchAt(viewport.xToTime(x)));
-        const p1 = Math.min(last, store.patchAt(viewport.xToTime(x) + secondsPerPixel));
-        if (p1 < p0) continue;
-        let peak = -Infinity;
-        for (let p = p0; p <= p1; p++) {
-          const v = store.get(p, classIndex);
-          if (v > peak) peak = v;
-        }
-        const y = this.yOf(peak);
-        if (started) ctx.lineTo(x, y);
-        else {
-          ctx.moveTo(x, y);
-          started = true;
-        }
-      }
-    }
-    ctx.stroke();
+    for (const s of series) {
+      // The polyline, one vertex per frame centre when frames are wide enough to
+      // matter, otherwise one per pixel holding that pixel's peak -- a mean would
+      // erase exactly the brief events being looked for.
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
 
-    // One dot per frame: filled above threshold, hollow below. This is the
-    // detection marking -- there is no separate band to switch on.
-    if (framePx >= MIN_DOT_PX) {
+      if (framePx >= 1) {
+        for (let p = first; p <= last; p++) {
+          const x = viewport.timeToX(store.timeOf(p) + hop / 2);
+          const y = this.yOf(store.get(p, s.index));
+          if (p === first) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+      } else {
+        const secondsPerPixel = 1 / viewport.pixelsPerSecond;
+        let started = false;
+        for (let x = 0; x < this.width; x++) {
+          const p0 = Math.max(first, store.patchAt(viewport.xToTime(x)));
+          const p1 = Math.min(last, store.patchAt(viewport.xToTime(x) + secondsPerPixel));
+          if (p1 < p0) continue;
+          let peak = -Infinity;
+          for (let p = p0; p <= p1; p++) {
+            const v = store.get(p, s.index);
+            if (v > peak) peak = v;
+          }
+          const y = this.yOf(peak);
+          if (started) ctx.lineTo(x, y);
+          else {
+            ctx.moveTo(x, y);
+            started = true;
+          }
+        }
+      }
+      ctx.stroke();
+
+      // One dot per frame: filled above this series' threshold, hollow below.
+      // This is the detection marking -- there is no separate band to switch on.
+      if (!dots) continue;
       for (let p = first; p <= last; p++) {
         const cx = viewport.timeToX(store.timeOf(p) + hop / 2);
         if (cx < -DOT_RADIUS || cx > this.width + DOT_RADIUS) continue;
-        const v = store.get(p, classIndex);
+        const v = store.get(p, s.index);
         const cy = this.yOf(v);
         ctx.beginPath();
         ctx.arc(cx, cy, DOT_RADIUS, 0, Math.PI * 2);
-        if (v > this.threshold) {
-          ctx.fillStyle = color;
+        if (v > s.threshold) {
+          ctx.fillStyle = s.color;
           ctx.fill();
         } else {
           ctx.fillStyle = PANEL_BG;
           ctx.fill();
-          ctx.strokeStyle = color;
+          ctx.strokeStyle = s.color;
           ctx.lineWidth = 1;
           ctx.stroke();
         }
@@ -304,28 +323,4 @@ export class ActivationView {
       ctx.fillText(v.toFixed(1), w - 6, y);
     }
   }
-}
-
-/**
- * SeeNote's categorical palette, chosen to read on the dark panel and to stay
- * clear of the magma spectrogram colours.
- */
-const PALETTE = [
-  '#38bdf8',
-  '#fbbf24',
-  '#4ade80',
-  '#f472b6',
-  '#a78bfa',
-  '#22d3ee',
-  '#facc15',
-  '#fb923c',
-  '#34d399',
-  '#e879f9',
-  '#60a5fa',
-  '#a3e635',
-];
-
-export function colorFor(name: string): string {
-  const i = CLASSES.indexOf(name as (typeof CLASSES)[number]);
-  return PALETTE[(i < 0 ? 0 : i) % PALETTE.length];
 }

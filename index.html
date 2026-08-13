@@ -31,6 +31,11 @@
           <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
         </g>
         <g id="i-stop"><path d="M6 6h12v12H6z" /></g>
+        <g id="i-sliders">
+          <path d="M4 7h10M18 7h2M4 17h4M12 17h8" />
+          <circle cx="16" cy="7" r="2" />
+          <circle cx="10" cy="17" r="2" />
+        </g>
         <g id="i-volume">
           <path d="M4 9v6h4l5 4V5L8 9z" />
           <path d="M17 8a5 5 0 0 1 0 8" />
@@ -123,12 +128,30 @@
         <li>The top panel is the spectrogram, a The spectrogram's vertical axis is mel-spaced, matching what the model sees.</li>
         <li>The slider beside it sets the contrast window; the Hz boxes set the range shown.</li>
         <li>
-          Results are the model's raw activation for <code>ins_buzz</code> &mdash; unbounded model
-          units, not probabilities. The threshold is in those same units.
+          Results are the model's raw activations &mdash; unbounded model units, not
+          probabilities. Thresholds are in those same units.
+        </li>
+        <li>
+          <strong>Classes</strong> picks which of the thirteen outputs are plotted and sets a
+          threshold for each. Colours group by kind: insects yellow, ambient green,
+          mechanical blue, other animals and people pink.
         </li>
       </ul>
 
       <form method="dialog"><button class="button" type="submit">Close</button></form>
+    </dialog>
+
+    <!-- Class picker. Rows are built in main.ts from the model's own class
+         list, so nothing here has to be kept in step with it. -->
+    <dialog id="settings-dialog" class="help settings">
+      <h2>Classes</h2>
+      <p class="muted small">
+        Which of the model's outputs to plot, and the threshold each is counted against.
+        Thresholds are unbounded model units, not probabilities; buzzdetect's default is
+        &minus;1.20.
+      </p>
+      <div id="class-list" class="class-list"></div>
+      <form method="dialog"><button class="button" type="submit">Done</button></form>
     </dialog>
 
     <main>
@@ -185,17 +208,20 @@
       <!-- buzzdetect results, on the same time axis. -->
       <section class="panel">
         <div class="panel-head">
-          <strong id="series" class="series">ins_buzz</strong>
-          <label class="inline">
-            Threshold
-            <input id="threshold" class="num" type="number" step="0.05" value="-1.20" />
-          </label>
+          <button id="settings" class="button icon-button" type="button" title="Choose classes to plot">
+            <svg class="icon" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>
+            <span>Classes</span>
+          </button>
           <span class="grow"></span>
           <span id="detection-count" class="mono small muted"></span>
         </div>
         <div class="plotrow acts-row">
           <canvas id="acts-axis" class="gutter"></canvas>
-          <div id="acts" class="acts"></div>
+          <!-- The legend sits over the plot rather than beside it: the panel is
+               short, and a row of its own would come out of the plot's height. -->
+          <div id="acts" class="acts">
+            <div id="legend" class="legend"></div>
+          </div>
           <span class="rail-spacer"></span>
         </div>
       </section>

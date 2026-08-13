@@ -17,9 +17,9 @@
 
 import { decodeForAnalysis, encodeWav, LONG_FILE_SECONDS } from './audio/decode';
 import { Player, sliderToGain, gainToSlider } from './audio/player';
-import { BUZZ_INDEX, CLASSES } from './model/session';
 import { SpectrogramView } from './ui/spectrogramView';
-import { ActivationStore, ActivationView, colorFor } from './ui/activationView';
+import { ActivationStore, ActivationView } from './ui/activationView';
+import { SERIES, enabledSeries, type Series } from './ui/series';
 import { formatTimeShort, normalizeSelection, type Selection } from './ui/viewport';
 import { LiveSession, LIVE_STORE_PATCHES } from './live/liveSession';
 import { createDualRange } from './ui/rangeSlider';
@@ -47,15 +47,17 @@ const els = {
   timeaxis: $('timeaxis'),
   acts: $('acts'),
   actsAxis: $<HTMLCanvasElement>('acts-axis'),
-  threshold: $<HTMLInputElement>('threshold'),
   detectionCount: $('detection-count'),
+  settings: $<HTMLButtonElement>('settings'),
+  settingsDialog: $<HTMLDialogElement>('settings-dialog'),
+  classList: $('class-list'),
+  legend: $('legend'),
   toStart: $<HTMLButtonElement>('to-start'),
   play: $<HTMLButtonElement>('play'),
   playIcon: document.getElementById('play-icon') as unknown as SVGUseElement,
   time: $<HTMLInputElement>('time'),
   volume: $<HTMLInputElement>('volume'),
   volumeOut: $<HTMLOutputElement>('volume-out'),
-  series: $('series'),
 };
 
 const spec = new SpectrogramView(els.spec, els.specAxis, els.colorscale);
@@ -63,11 +65,12 @@ const acts = new ActivationView(els.acts, els.actsAxis);
 const store = new ActivationStore();
 const player = new Player();
 
-/** The only class shown. buzzdetect's other twelve are still computed, just not plotted. */
-const CLASS_INDEX = BUZZ_INDEX;
-const SERIES_COLOR = colorFor(CLASSES[CLASS_INDEX]);
-// One source of truth for the series colour: the label matches the polyline.
-els.series.style.color = SERIES_COLOR;
+/**
+ * The classes currently plotted. All thirteen are always computed -- the model
+ * emits them in one pass whatever is shown -- so switching one on costs a
+ * redraw and nothing else.
+ */
+let shown: Series[] = enabledSeries();
 
 let mediaUrl: string | null = null;
 let hasAudio = false;
@@ -148,9 +151,13 @@ worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
  * under the cursor every time a loud frame arrives.
  */
 function autoRange(): void {
-  const { min, max } = store.range(CLASS_INDEX);
-  acts.min = Math.min(acts.min, Math.floor(min * 2) / 2);
-  acts.max = Math.max(acts.max, Math.ceil(max * 2) / 2);
+  // Over the shown classes only: a class nobody is looking at should not be
+  // able to flatten everything else against the axis.
+  for (const s of shown) {
+    const { min, max } = store.range(s.index);
+    acts.min = Math.min(acts.min, Math.floor(min * 2) / 2);
+    acts.max = Math.max(acts.max, Math.ceil(max * 2) / 2);
+  }
 }
 
 // ------------------------------------------------------------------ file ---
@@ -481,7 +488,7 @@ document.addEventListener('keydown', (e) => {
   if (target?.tagName === 'INPUT' && (target as HTMLInputElement).type !== 'range') return;
   // The dialog owns the keyboard while it is up: Escape should close it, not
   // also clear the selection behind it.
-  if (els.helpDialog.open) return;
+  if (els.helpDialog.open || els.settingsDialog.open) return;
 
   switch (e.key) {
     case ' ':
@@ -509,17 +516,91 @@ function offsetX(e: PointerEvent | WheelEvent, area: HTMLElement): number {
 
 // -------------------------------------------------------------- controls ---
 
-els.threshold.addEventListener('change', () => {
-  const v = Number(els.threshold.value);
-  if (!Number.isFinite(v)) {
-    els.threshold.value = acts.threshold.toFixed(2);
-    return;
+// ------------------------------------------------------- class selection ---
+
+/**
+ * Builds the picker once, from the model's class list.
+ *
+ * Every class gets a row whether or not it is plotted, so turning one on is one
+ * click rather than a search, and its threshold sits in the row it belongs to
+ * rather than in a second list that has to be matched up by name.
+ */
+function buildClassList(): void {
+  const frag = document.createDocumentFragment();
+  for (const s of SERIES) {
+    const row = document.createElement('label');
+    row.className = 'class-row';
+
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.checked = s.enabled;
+
+    const pip = document.createElement('span');
+    pip.className = 'pip';
+    pip.style.background = s.color;
+
+    const name = document.createElement('span');
+    name.className = 'class-name';
+    name.textContent = s.name;
+    name.style.color = s.color;
+
+    const threshold = document.createElement('input');
+    threshold.type = 'number';
+    threshold.className = 'num';
+    threshold.step = '0.05';
+    threshold.value = s.threshold.toFixed(2);
+    threshold.title = `Threshold for ${s.name}`;
+    // Inside a <label>: without this, clicking the field toggles the checkbox.
+    threshold.addEventListener('click', (e) => e.stopPropagation());
+
+    check.addEventListener('change', () => {
+      s.enabled = check.checked;
+      seriesChanged();
+    });
+    threshold.addEventListener('change', () => {
+      const v = Number(threshold.value);
+      if (!Number.isFinite(v)) {
+        threshold.value = s.threshold.toFixed(2);
+        return;
+      }
+      s.threshold = v;
+      threshold.value = v.toFixed(2);
+      actsDirty = true;
+      updateDetectionCount();
+    });
+
+    row.append(check, pip, name, threshold);
+    frag.append(row);
   }
-  acts.threshold = v;
-  els.threshold.value = v.toFixed(2);
-  actsDirty = true;
+  els.classList.replaceChildren(frag);
+}
+
+/** Legend: the plotted classes, over the plot's top-right corner. */
+function drawLegend(): void {
+  const frag = document.createDocumentFragment();
+  for (const s of shown) {
+    const item = document.createElement('span');
+    item.className = 'legend-item';
+    item.style.color = s.color;
+    const pip = document.createElement('span');
+    pip.className = 'pip';
+    pip.style.background = s.color;
+    item.append(pip, s.name);
+    frag.append(item);
+  }
+  els.legend.replaceChildren(frag);
+}
+
+function seriesChanged(): void {
+  shown = enabledSeries();
+  autoRange();
+  drawLegend();
   updateDetectionCount();
-});
+  actsDirty = true;
+}
+
+els.settings.addEventListener('click', () => els.settingsDialog.showModal());
+buildClassList();
 
 for (const el of [els.minHz, els.maxHz]) {
   el.addEventListener('change', () => {
@@ -640,12 +721,14 @@ els.volume.addEventListener('input', () => {
 els.volume.value = String(gainToSlider(1));
 
 function updateDetectionCount(): void {
-  if (store.filled === 0) {
+  if (store.filled === 0 || shown.length === 0) {
     els.detectionCount.textContent = '';
     return;
   }
-  const n = store.countDetections(CLASS_INDEX, acts.threshold);
-  els.detectionCount.textContent = `${n} detections from ${store.filled} frames`;
+  // Per class, since each is counted against its own threshold; a total across
+  // classes would not mean anything.
+  const parts = shown.map((s) => `${s.name} ${store.countDetections(s.index, s.threshold)}`);
+  els.detectionCount.textContent = `${parts.join(' · ')} — of ${store.filled} frames`;
 }
 
 // ------------------------------------------------------------- rendering ---
@@ -752,7 +835,7 @@ function frame(): void {
 
   if (actsDirty) {
     actsDirty = false;
-    acts.draw(store, CLASS_INDEX, SERIES_COLOR, vp, head, selection);
+    acts.draw(store, shown, vp, head, selection);
   }
 
   if (overlayDirty) {
@@ -865,5 +948,6 @@ async function stopLive(): Promise<void> {
 // ------------------------------------------------------------------ boot ---
 
 resize();
+drawLegend();
 updateSourcePrompt();
 requestAnimationFrame(frame);

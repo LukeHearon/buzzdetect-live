@@ -593,6 +593,74 @@ label.button:focus-visible {
   margin: 0;
 }
 
-.series {
-  font-family: ui-monospace, monospace;
+/* Legend, over the top-right of the results plot. The names carry their series
+   colour, so the plot needs no other key. Columns wrap leftwards once the list
+   is taller than the panel; `align-content: flex-end` is what keeps the block
+   pinned to the right edge as it grows. */
+.legend {
+  position: absolute;
+  top: 5px;
+  right: 8px;
+  max-height: calc(100% - 10px);
+  display: flex;
+  flex-flow: column wrap;
+  align-content: flex-end;
+  gap: 1px 14px;
+  /* A key, not a control: clicks belong to the plot underneath. */
+  pointer-events: none;
+  z-index: 1;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font: 11px/1.5 ui-monospace, monospace;
+  /* The plot runs under this, so the text needs its own ground. */
+  text-shadow:
+    0 0 3px #0b1220,
+    0 0 3px #0b1220;
+}
+
+.pip {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+/* Class picker rows: checkbox, pip, name, threshold. The name column is fixed
+   so the threshold fields line up in one edge rather than stepping with the
+   length of each class name. */
+.settings {
+  max-width: 34ch;
+}
+.class-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 12px;
+}
+.class-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.class-row:hover {
+  background: #16213a;
+}
+.class-name {
+  flex: 1;
+  min-width: 0;
+  font: 12px/1 ui-monospace, monospace;
+}
+.class-row input[type='checkbox'] {
+  accent-color: var(--accent);
+  margin: 0;
+}
+.class-row .num {
+  width: 56px;
+  cursor: text;
 }
