@@ -7,6 +7,12 @@
  */
 
 import * as ort from 'onnxruntime-web/wasm';
+// Imported for its URL, not its contents: see the wasmPaths note in configure().
+// The path is relative into node_modules because the package's exports map does
+// not expose dist/, and going through it keeps the file version-locked to the
+// installed onnxruntime-web rather than a copy that can drift.
+import runtimeMjsUrl from '../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs?url';
+import runtimeWasmUrl from '../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm?url';
 import { PATCH_FRAMES, MEL_BANDS, PATCH_VALUES } from '../dsp/melspec';
 
 /**
@@ -61,11 +67,30 @@ function configure(): void {
   if (configured) return;
   configured = true;
 
-  // wasmPaths is deliberately NOT set. onnxruntime-web resolves its own wasm
-  // relative to its module URL, which the bundler rewrites to a hashed asset on
-  // our own origin -- no CDN, works offline, cached by content. Pointing
-  // wasmPaths at a hand-copied directory instead would ship a second, unhashed
-  // 13 MB copy of the same binary.
+  // Both runtime files are named explicitly, because the runtime cannot locate
+  // either one from inside a bundle.
+  //
+  // To start pthreads it spawns workers from ort-wasm-simd-threaded.mjs, and
+  // when it cannot use its inlined copy it derives that name from the script
+  // directory -- a file the build never emits. Under `vite dev` the request
+  // happens to hit the real one in node_modules, so this only fails once built:
+  // the spawn 404s, and a worker that never starts leaves
+  // InferenceSession.create pending forever. Nothing throws, so it presents as
+  // a load that hangs rather than an error.
+  //
+  // Setting wasmPaths then routes *every* runtime file through it, the .wasm
+  // included, so that one must be named too or it 404s in turn. Importing both
+  // for their URLs keeps them ordinary build artifacts: hashed, on our own
+  // origin, no CDN, and version-locked to the installed onnxruntime-web. The
+  // bundler already emitted this same .wasm for its own internal reference and
+  // dedupes by source path, so there is still only one 13 MB copy.
+  //
+  // Absolutised: the bundler emits root-relative paths, and the runtime hands
+  // whatever it is given straight to `new URL()` with no base.
+  ort.env.wasm.wasmPaths = {
+    mjs: new URL(runtimeMjsUrl, self.location.href).href,
+    wasm: new URL(runtimeWasmUrl, self.location.href).href,
+  };
 
   // Threads need SharedArrayBuffer, which needs the page to be cross-origin
   // isolated (COOP/COEP). Where that is not available -- plain static hosting,
@@ -88,19 +113,85 @@ export interface LoadedModel {
   bytes: number;
 }
 
+/**
+ * What ORT reports when its runtime fails to load is "no available backend
+ * found. ERR: [wasm] RuntimeError: Aborted(CompileError: ... failed to match
+ * magic number)" -- which says only that something that wasn't WebAssembly was
+ * handed to the compiler. The useful fact is *which* request returned it, and
+ * only the loader knows that, so record its fetches for the duration of the
+ * call and name the culprit if it fails.
+ *
+ * A misconfigured static host is the expected cause: the runtime's own assets
+ * 404 to an HTML error page, and the compiler is fed that HTML.
+ */
+interface FetchRecord {
+  url: string;
+  status: number;
+  type: string;
+}
+
+async function withFetchLog<T>(fn: () => Promise<T>): Promise<[T | undefined, FetchRecord[], unknown]> {
+  const log: FetchRecord[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async (...args: Parameters<typeof fetch>) => {
+    const response = await original(...args);
+    log.push({
+      url: typeof args[0] === 'string' ? args[0] : String((args[0] as Request).url ?? args[0]),
+      status: response.status,
+      type: response.headers.get('content-type') ?? 'unknown',
+    });
+    return response;
+  };
+  try {
+    return [await fn(), log, undefined];
+  } catch (err) {
+    return [undefined, log, err];
+  } finally {
+    globalThis.fetch = original;
+  }
+}
+
+function explainRuntimeFailure(err: unknown, log: FetchRecord[]): Error {
+  const detail = err instanceof Error ? err.message : String(err);
+  const bad = log.find((r) => !(r.status >= 200 && r.status < 300));
+  const html = log.find((r) => r.type.includes('html'));
+
+  if (bad) {
+    return new Error(
+      `The WebAssembly runtime could not be loaded: ${bad.url} returned HTTP ${bad.status} ` +
+        `(${bad.type}). Its file is missing from the deployment.`,
+    );
+  }
+  if (html) {
+    return new Error(
+      `The WebAssembly runtime could not be loaded: ${html.url} was served as ${html.type}, ` +
+        `not application/wasm. The host is likely returning an error page in its place.`,
+    );
+  }
+  if (typeof WebAssembly === 'undefined') {
+    return new Error('This browser has no WebAssembly support, which the model requires.');
+  }
+  return new Error(`The model could not be started: ${detail}`);
+}
+
 export async function loadModel(url: string | URL = MODEL_URL): Promise<LoadedModel> {
   configure();
   const response = await fetch(url);
-  if (!response.ok) throw new Error(`could not fetch model: ${response.status}`);
+  if (!response.ok) {
+    throw new Error(`Could not download the model: ${url} returned HTTP ${response.status}.`);
+  }
   const bytes = await response.arrayBuffer();
 
-  const session = await ort.InferenceSession.create(bytes, {
-    executionProviders: ['wasm'],
-    graphOptimizationLevel: 'all',
-    // The graph has a dynamic batch dimension but is otherwise fully static, so
-    // the runtime can plan its allocations once and reuse them.
-    enableMemPattern: true,
-  });
+  const [session, log, err] = await withFetchLog(() =>
+    ort.InferenceSession.create(bytes, {
+      executionProviders: ['wasm'],
+      graphOptimizationLevel: 'all',
+      // The graph has a dynamic batch dimension but is otherwise fully static, so
+      // the runtime can plan its allocations once and reuse them.
+      enableMemPattern: true,
+    }),
+  );
+  if (!session) throw explainRuntimeFailure(err, log);
 
   const threads = ort.env.wasm.numThreads ?? 1;
   return { session, threaded: threads > 1, threads, bytes: bytes.byteLength };

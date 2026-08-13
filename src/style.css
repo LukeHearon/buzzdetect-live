@@ -53,7 +53,8 @@ body {
 .bar {
   display: flex;
   align-items: center;
-  gap: 14px;
+  flex-wrap: wrap;
+  gap: 6px 14px;
   padding: 8px 12px;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
@@ -64,6 +65,9 @@ body {
    MAGMA_STOPS from ui/colormap.ts, entered at its purple mid-point: the true
    dark end is near-black and would vanish into the bar. */
 .brand strong {
+  /* The gradient is clipped to the text, so a wrapped wordmark would restart
+     the ramp on the second line. */
+  white-space: nowrap;
   background: linear-gradient(
     90deg,
     #7a2382 0%,
@@ -182,13 +186,21 @@ main {
   border-top: 0;
 }
 
+/* Wraps rather than overflows: on a phone the Hz and contrast controls are
+   wider than the viewport, and an unwrapped row pushes them off-screen with no
+   way to scroll to them. The row-gap keeps the wrapped lines from touching. */
 .panel-head {
   display: flex;
   align-items: center;
-  gap: 14px;
+  flex-wrap: wrap;
+  gap: 6px 14px;
   padding: 6px 10px;
   border-bottom: 1px solid var(--line);
   flex: none;
+}
+/* A wrapped .grow would otherwise take a whole line to itself. */
+.panel-head .grow {
+  min-width: 0;
 }
 
 .inline {
