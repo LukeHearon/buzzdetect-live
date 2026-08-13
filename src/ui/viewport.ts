@@ -44,14 +44,25 @@ export class Viewport {
     this.clamp();
   }
 
-  /** Zooms about a fixed pixel, so the time under the cursor stays put. */
-  zoomAt(x: number, factor: number, minPps = 0.5, maxPps = 4000): void {
+  /**
+   * Sets the scale about a fixed pixel, so the time under that pixel stays put.
+   *
+   * A pinch works in absolute scale rather than in factors: it has a finger
+   * separation to hand, not an increment, and turning that into a factor per
+   * move only to multiply it back in loses precision for nothing.
+   */
+  setScaleAt(x: number, pixelsPerSecond: number, minPps = 0.5, maxPps = 4000): void {
     const anchor = this.xToTime(x);
-    const next = Math.min(maxPps, Math.max(minPps, this.pixelsPerSecond * factor));
+    const next = Math.min(maxPps, Math.max(minPps, pixelsPerSecond));
     if (next === this.pixelsPerSecond) return;
     this.pixelsPerSecond = next;
     this.start = anchor - x / this.pixelsPerSecond;
     this.clamp();
+  }
+
+  /** Zooms about a fixed pixel, so the time under the cursor stays put. */
+  zoomAt(x: number, factor: number, minPps = 0.5, maxPps = 4000): void {
+    this.setScaleAt(x, this.pixelsPerSecond * factor, minPps, maxPps);
   }
 
   /** Fits the whole media in view. */

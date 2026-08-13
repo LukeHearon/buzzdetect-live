@@ -290,6 +290,9 @@ input[type='range'] {
   flex: 1;
   min-width: 0;
   cursor: crosshair;
+  /* Both panels handle their own touch gestures; without this the browser
+     takes the pinch and scrolls or zooms the page instead. */
+  touch-action: none;
 }
 .acts canvas {
   display: block;

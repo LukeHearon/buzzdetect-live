@@ -248,13 +248,25 @@ async function loadFile(file: File): Promise<void> {
  * through -- what you get is what you aimed at, not what was left after the
  * delay elapsed.
  */
-const SELECTION_HOLD_MS = 100;
+const SELECTION_HOLD_MS = 300;
+
+/** Travel, in pixels, past which a touch drag is a pan and not a tap. */
+const TAP_SLOP_PX = 8;
 
 let dragging: {
   startTime: number;
   startedAt: number;
   selecting: boolean;
   onActs: boolean;
+  /**
+   * Touch only: one finger drags the timeline rather than selecting on it.
+   * `touch-action: none` means the browser will not pan these panels for us,
+   * and pinching alone leaves no way to move sideways. Selection stays a
+   * mouse gesture; on touch a frame is still selected by tapping it.
+   */
+  panning: boolean;
+  lastX: number;
+  moved: boolean;
 } | null = null;
 
 /** A drag becomes a selection once it is both old enough and long enough. */
@@ -265,26 +277,100 @@ function selectionBegun(d: NonNullable<typeof dragging>, t: number): boolean {
 for (const area of [els.spec, els.acts]) {
   const onActs = area === els.acts;
 
+  /**
+   * Touch points currently down on this panel, by id, as x within the panel.
+   *
+   * Two of them is a pinch: the scale follows the ratio of their separation and
+   * the view follows their midpoint, so zoom and pan come out of one gesture --
+   * which is what a pinch on a timeline is expected to do. A pinch is anchored
+   * afresh on every move rather than against where the fingers started, so the
+   * midpoint sliding sideways pans by exactly that much.
+   */
+  const pointers = new Map<number, number>();
+  let pinch: { distance: number; x: number } | null = null;
+
+  /** Separation and midpoint of the first two pointers down, or null. */
+  function spread(): { distance: number; x: number } | null {
+    if (pointers.size < 2) return null;
+    const [a, b] = [...pointers.values()];
+    return { distance: Math.abs(a - b), x: (a + b) / 2 };
+  }
+
+  function viewChanged(): void {
+    if (live) following = spec.viewport.end >= spec.viewport.duration - 0.5;
+    spec.invalidate();
+    actsDirty = true;
+    overlayDirty = true;
+  }
+
   area.addEventListener('pointerdown', (e) => {
     if (!hasData()) return;
     area.setPointerCapture(e.pointerId);
-    const t = spec.viewport.xToTime(offsetX(e, area));
+    const x = offsetX(e, area);
+    pointers.set(e.pointerId, x);
+
+    const second = spread();
+    if (second) {
+      // A second finger converts whatever the first was doing into a pinch,
+      // including undoing a selection it had started to drag out.
+      if (dragging?.selecting) selection = null;
+      dragging = null;
+      pinch = second;
+      hoverX = null;
+      actsDirty = true;
+      overlayDirty = true;
+      return;
+    }
+
     dragging = {
-      startTime: t,
+      startTime: spec.viewport.xToTime(x),
       startedAt: performance.now(),
       selecting: false,
       onActs,
+      panning: e.pointerType === 'touch',
+      lastX: x,
+      moved: false,
     };
   });
 
   area.addEventListener('pointermove', (e) => {
     const x = offsetX(e, area);
-    hoverX = x;
+    if (pointers.has(e.pointerId)) pointers.set(e.pointerId, x);
+
+    // A finger leaves no cursor, so it should leave no hover line either.
+    hoverX = e.pointerType === 'touch' ? null : x;
     overlayDirty = true;
+
+    if (pinch) {
+      const now = spread();
+      if (!now || now.distance <= 0) return;
+      const vp = spec.viewport;
+      vp.panBy((pinch.x - now.x) / vp.pixelsPerSecond);
+      vp.setScaleAt(
+        now.x,
+        vp.pixelsPerSecond * (now.distance / pinch.distance),
+        minPixelsPerSecond(),
+      );
+      pinch = now;
+      viewChanged();
+      return;
+    }
 
     const t = spec.viewport.xToTime(x);
 
     if (dragging) {
+      if (dragging.panning) {
+        if (Math.abs(x - dragging.lastX) > 0) {
+          const vp = spec.viewport;
+          if (!dragging.moved && Math.abs(vp.timeToX(dragging.startTime) - x) > TAP_SLOP_PX) {
+            dragging.moved = true;
+          }
+          vp.panBy((dragging.lastX - x) / vp.pixelsPerSecond);
+          dragging.lastX = x;
+          viewChanged();
+        }
+        return;
+      }
       if (selectionBegun(dragging, t)) dragging.selecting = true;
       if (dragging.selecting) {
         selection = normalizeSelection({ from: dragging.startTime, to: t });
@@ -293,9 +379,26 @@ for (const area of [els.spec, els.acts]) {
     }
   });
 
+  function endPointer(e: PointerEvent): void {
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) pinch = null;
+    if (e.pointerType === 'touch') {
+      hoverX = null;
+      overlayDirty = true;
+    }
+  }
+
   area.addEventListener('pointerup', (e) => {
+    endPointer(e);
     if (!dragging) return;
-    const t = spec.viewport.xToTime(offsetX(e, area));
+    // A pan that went anywhere is not also a seek.
+    if (dragging.panning && dragging.moved) {
+      dragging = null;
+      return;
+    }
+    // A tap has not moved, so the press point is the point meant -- and after a
+    // pan the pixel under the finger no longer means what it did on the way down.
+    const t = dragging.panning ? dragging.startTime : spec.viewport.xToTime(offsetX(e, area));
     // Judged again here: a drag that came to rest before the hold elapsed
     // sends no further pointermove, so this is the only place left to notice
     // that it has since become one.
@@ -323,6 +426,11 @@ for (const area of [els.spec, els.acts]) {
     dragging = null;
     overlayDirty = true;
     actsDirty = true;
+  });
+
+  area.addEventListener('pointercancel', (e) => {
+    endPointer(e);
+    dragging = null;
   });
 
   area.addEventListener('pointerleave', () => {
@@ -579,6 +687,8 @@ function drawTimeAxis(): void {
 }
 
 let lastViewKey = '';
+/** Playhead position as last drawn, in whole pixels; null when there is none. */
+let lastHeadX: number | null = null;
 /** Live only: whether the viewport is pinned to the right edge. */
 let following = true;
 
@@ -622,16 +732,31 @@ function frame(): void {
     overlayDirty = true;
   }
 
+  // The playhead moves on its own, without the view moving with it: whenever
+  // playback does not scroll the view -- zoomed out far enough that the whole
+  // media fits, or clamped at either end -- the view key is unchanged, so this
+  // is the only thing that marks the panels dirty. The activation panel draws
+  // its playhead into the same canvas as its data, so missing this leaves its
+  // line parked where it was last painted while the spectrogram's own overlay,
+  // redrawn every frame during playback, goes on advancing.
+  const head = playhead();
+  const headX = head === null ? null : Math.round(vp.timeToX(head));
+  if (headX !== lastHeadX) {
+    lastHeadX = headX;
+    actsDirty = true;
+    overlayDirty = true;
+  }
+
   spec.drawBase();
 
   if (actsDirty) {
     actsDirty = false;
-    acts.draw(store, CLASS_INDEX, SERIES_COLOR, vp, playhead(), selection);
+    acts.draw(store, CLASS_INDEX, SERIES_COLOR, vp, head, selection);
   }
 
   if (overlayDirty) {
     overlayDirty = false;
-    spec.drawOverlay(playhead(), selection, hoverX);
+    spec.drawOverlay(head, selection, hoverX);
   }
 
   requestAnimationFrame(frame);

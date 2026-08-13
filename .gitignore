@@ -3,3 +3,4 @@ dist/
 tools/.venv/
 tools/artifacts/
 .DS_Store
+CLAUDE.md
