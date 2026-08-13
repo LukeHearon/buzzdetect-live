@@ -1,0 +1,30 @@
+{
+ "source": "/Users/luke/Documents/lukehearon.com/datasets/five_flowers_audio/soybean/53/230809_1300.mp3",
+ "framehopProp": 1.0,
+ "sampleRate": 16000,
+ "numSamples": 160000,
+ "numPatches": 11,
+ "patchShape": [
+  96,
+  64
+ ],
+ "melMatrixShape": [
+  257,
+  64
+ ],
+ "classes": [
+  "mech_train",
+  "ins_trill",
+  "frog",
+  "ambient_noise",
+  "mech_plane",
+  "ambient_rain",
+  "mech_hum",
+  "mech_auto",
+  "ins_buzz",
+  "mech_siren",
+  "ambient_background",
+  "bird_goose",
+  "human"
+ ]
+}

@@ -1,0 +1,341 @@
+/* SeeNote's palette and layout, trimmed to one screen: spectrogram on top, a
+   shared time axis, buzzdetect results below, transport at the bottom. */
+
+:root {
+  --bg: #070b14;
+  --panel: #0b1220;
+  --line: #1e293b;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --accent: #38bdf8;
+  --gutter: 50px;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Without this, `hidden` loses to the display rules below and the element
+   stays on screen. */
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.muted {
+  color: var(--muted);
+}
+.small {
+  font-size: 11px;
+}
+.grow {
+  flex: 1;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+
+.brand {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.button {
+  background: #16213a;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 5px 10px;
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.button:hover:not(:disabled) {
+  background: #1e2c4a;
+}
+.button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.button.on {
+  background: #7f1d1d;
+  border-color: #b91c1c;
+}
+
+.status {
+  color: var(--muted);
+  white-space: nowrap;
+}
+.status.error {
+  color: #fca5a5;
+}
+.status.busy {
+  color: var(--accent);
+}
+
+.badge {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: 11px/1 ui-monospace, monospace;
+  letter-spacing: 0.08em;
+  color: #fca5a5;
+}
+.badge .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ef4444;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.meter {
+  width: 70px;
+  height: 6px;
+  background: #16213a;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.meter span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width 60ms linear;
+}
+
+main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 10px;
+  gap: 0;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.panel.plot {
+  flex: 1;
+  border-radius: 6px 6px 0 0;
+  /* The spectrogram must never be squeezed away by a crowded window. */
+  min-height: 160px;
+}
+.panel:not(.plot) {
+  border-radius: 0 0 6px 6px;
+  border-top: 0;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+
+.inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+
+select,
+input[type='range'] {
+  accent-color: var(--accent);
+  background: #16213a;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font: inherit;
+}
+select {
+  padding: 3px 6px;
+}
+input[type='range'] {
+  width: 96px;
+  border: 0;
+  background: transparent;
+}
+
+/* A gutter canvas beside a plot; the two panels share the width so their time
+   axes line up. */
+.plotrow {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.gutter {
+  flex: none;
+  width: var(--gutter);
+  display: block;
+}
+.acts-row {
+  flex: none;
+  height: 150px;
+}
+
+.spec {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  cursor: crosshair;
+  touch-action: none;
+}
+.spec canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+.spec-overlay {
+  pointer-events: none;
+}
+
+.acts {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  cursor: crosshair;
+}
+.acts canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.timeaxis-row {
+  display: flex;
+  height: 20px;
+  flex: none;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+}
+.gutter-spacer {
+  width: var(--gutter);
+  flex: none;
+  text-align: right;
+  padding-right: 6px;
+  line-height: 20px;
+  border-right: 1px solid rgba(255, 255, 255, 0.15);
+}
+.timeaxis {
+  flex: 1;
+  position: relative;
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  color: var(--muted);
+  overflow: hidden;
+}
+.timeaxis span {
+  position: absolute;
+  top: 4px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.timeaxis span::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -4px;
+  height: 4px;
+  border-left: 1px solid rgba(148, 163, 184, 0.4);
+}
+
+.transport {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 10px;
+  margin-top: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  flex: none;
+  flex-wrap: wrap;
+}
+
+.hint {
+  margin: 8px 0 0;
+  text-align: center;
+  flex: none;
+}
+
+/* Icons and numeric inputs */
+.icon {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  display: block;
+}
+#i-play,
+#i-start {
+  fill: currentColor;
+  stroke-linejoin: round;
+}
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.num {
+  width: 62px;
+  background: #16213a;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 3px 5px;
+  font: 12px/1 ui-monospace, monospace;
+}
+.series {
+  font-family: ui-monospace, monospace;
+}
