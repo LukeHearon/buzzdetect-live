@@ -191,6 +191,14 @@ class LiveAnalyzer {
 
 let live: LiveAnalyzer | null = null;
 
+// Fetch and compile the model as soon as the worker exists, rather than on the
+// first file. The 6.5 MB download and the wasm compile overlap with the user
+// finding a file to open, and the header can stop saying "Loading model" when
+// it is actually true.
+ensureModel().catch((err: unknown) => {
+  post({ type: 'error', message: err instanceof Error ? err.message : String(err) });
+});
+
 ctx.onmessage = async (e: MessageEvent<WorkerRequest>) => {
   try {
     const msg = e.data;

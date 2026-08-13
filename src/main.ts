@@ -113,9 +113,10 @@ worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
       break;
 
     case 'done': {
-      const rate = spec.viewport.duration / (msg.elapsedMs / 1000);
+      const seconds = msg.elapsedMs / 1000;
+      const rate = spec.viewport.duration / seconds;
       setStatus(
-        `${msg.totalPatches} frames in ${(msg.elapsedMs / 1000).toFixed(1)}s ` +
+        `Analyzed ${spec.viewport.duration.toFixed(0)} seconds in ${seconds.toFixed(1)}s ` +
           `(${rate.toFixed(0)}× realtime)`,
       );
       updateDetectionCount();
