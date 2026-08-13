@@ -41,6 +41,7 @@ const els = {
   minHz: $<HTMLInputElement>('min-hz'),
   maxHz: $<HTMLInputElement>('max-hz'),
   contrast: $('contrast'),
+  colorscale: $<HTMLCanvasElement>('colorscale'),
   spec: $('spec'),
   specAxis: $<HTMLCanvasElement>('spec-axis'),
   timeaxis: $('timeaxis'),
@@ -57,7 +58,7 @@ const els = {
   series: $('series'),
 };
 
-const spec = new SpectrogramView(els.spec, els.specAxis);
+const spec = new SpectrogramView(els.spec, els.specAxis, els.colorscale);
 const acts = new ActivationView(els.acts, els.actsAxis);
 const store = new ActivationStore();
 const player = new Player();

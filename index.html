@@ -6,7 +6,7 @@
     <title>buzzdetect live</title>
     <meta
       name="description"
-      content="Run the buzzdetect pollinator-buzz model on audio in your browser. Nothing is uploaded."
+      content="A playground to run buzzdetect analyses in your browser!"
     />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
@@ -41,6 +41,45 @@
     <header class="bar">
       <div class="brand"><strong>buzzdetect live!</strong></div>
 
+      <span class="divider" role="separator"></span>
+
+      <button id="mic" class="button icon-button" type="button" title="Record from microphone">
+        <svg class="icon" viewBox="0 0 24 24"><use href="#i-record" /></svg>
+        <span id="mic-label" class="sr-only">Record</span>
+      </button>
+      <label id="open-file" class="button icon-button" for="file" title="Open an audio file">
+        <svg class="icon" viewBox="0 0 24 24"><use href="#i-folder" /></svg>
+        <span class="sr-only">Open audio file</span>
+      </label>
+      <input id="file" type="file" accept="audio/*,.wav,.mp3,.m4a,.flac,.ogg" hidden />
+
+      <span class="divider" role="separator"></span>
+
+      <button id="to-start" class="button icon-button" type="button" title="Jump to start" disabled>
+        <svg class="icon" viewBox="0 0 24 24"><use href="#i-start" /></svg>
+      </button>
+      <button id="play" class="button icon-button" type="button" title="Play / pause" disabled>
+        <svg class="icon" viewBox="0 0 24 24"><use id="play-icon" href="#i-play" /></svg>
+      </button>
+      <!-- Editable: type a timestamp to seek. Reads as plain text until
+           focused, so it stays a readout first and a control second. -->
+      <input
+        id="time"
+        class="mono timefield"
+        type="text"
+        inputmode="decimal"
+        value="0:00.0"
+        spellcheck="false"
+        aria-label="Playback position — type seconds or MM:SS.SS to seek"
+        title="Type seconds or MM:SS.SS to seek"
+      />
+
+      <label class="inline small" title="Playback gain — centre is unity, up to 3×">
+        <svg class="icon muted" viewBox="0 0 24 24"><use href="#i-volume" /></svg>
+        <input id="volume" type="range" min="0" max="1" step="0.005" value="0.5" />
+        <output id="volume-out" class="mono small">1.0×</output>
+      </label>
+
       <span id="live-badge" class="badge" hidden>
         <span class="dot"></span>LIVE
         <span class="meter"><span id="meter-fill"></span></span>
@@ -48,7 +87,7 @@
 
       <span class="grow"></span>
       <span id="status" class="status">Loading model…</span>
-      <button id="help" class="button icon-button" type="button" title="What this is, and how to drive it">
+      <button id="help" class="button icon-button" type="button" title="Help">
         <span aria-hidden="true">?</span>
         <span class="sr-only">Help</span>
       </button>
@@ -57,30 +96,31 @@
     <!-- Native <dialog>: Escape, focus trapping and the backdrop come for free,
          which is the whole of what this needs. -->
     <dialog id="help-dialog" class="help">
-      <h2>buzzdetect live</h2>
+      <h2>buzzdetect live!</h2>
       <p>
-        Runs buzzdetect's <code>model_general_v3</code> on audio, entirely in this tab. Nothing is
-        uploaded and nothing leaves the machine.
+        Runs a compressed version of buzzdetect's <code>model_general_v3</code> on audio.
+        All processing happens locally on your browser; audio isn't uploaded.
       </p>
 
       <h3>Getting audio in</h3>
       <ul>
-        <li>Open an audio file, or record from the microphone.</li>
-        <li>Recording keeps the last five minutes; stopping turns it into an ordinary file.</li>
+        <li>You can ether open an existing audio file (whatever formats your browser supported), or you can record from your microphone.</li>
+        <li>Live recording only retains up to five minutes of audio. You can watch the analysis stream in during recording; afterwards, you can browse it like a normal file. </li>
       </ul>
 
-      <h3>Moving around</h3>
+      <h3>Navigation</h3>
       <ul>
-        <li>Click to seek. Hold and drag to select a range; press Escape to clear it.</li>
-        <li>Click a bar in the results to select exactly the audio that frame scored.</li>
-        <li>Scroll or pinch to zoom, shift-scroll or swipe sideways to pan.</li>
-        <li>Space plays and pauses; the arrow keys step, and shift makes them step further.</li>
-        <li>Type a position into the time readout, as seconds or <code>MM:SS.SS</code>.</li>
+        <li>Click on the spectrogram (top panel) to seek the playhead to that position.</li>
+        <li>Click and drag to create a selection, bounding playback to the selected range.</li>
+        <li>Click on the buzzdtect results (bottom panel) to select that frame of buzzdetect results.</li>
+        <li>You can zoom by scrolling (pinch-zoom on mobile) and pan by shift-scrolling (swipe on mobile).</li>
+        <li>Press the spacebar to play/pause. Step the playhead with the arrow keys (hold shift for larger steps).</li>
+        <li>You can enter a desired time in the running seconds at the bottom, in the navigation toolbar. Use raw seconds or <code>MM:SS.SS</code>.</li>
       </ul>
 
-      <h3>The display</h3>
+      <h3>Panels</h3>
       <ul>
-        <li>The spectrogram's vertical axis is mel-spaced, matching what the model sees.</li>
+        <li>The top panel is the spectrogram, a The spectrogram's vertical axis is mel-spaced, matching what the model sees.</li>
         <li>The slider beside it sets the contrast window; the Hz boxes set the range shown.</li>
         <li>
           Results are the model's raw activation for <code>ins_buzz</code> &mdash; unbounded model
@@ -97,26 +137,47 @@
         <div class="panel-head">
           <span id="filename" class="muted">Open an audio file or record audio to begin</span>
           <span class="grow"></span>
-          <label class="inline small">
-            Hz
-            <input id="min-hz" class="num" type="number" min="0" step="100" value="0" />
-            <span class="muted">–</span>
-            <input id="max-hz" class="num" type="number" min="100" step="100" value="6000" />
-          </label>
         </div>
         <div class="plotrow">
-          <canvas id="spec-axis" class="gutter"></canvas>
+          <!-- Frequency gutter, with the range boxes docked on the axis itself:
+               high end at the top, low end at the bottom, matching the scale
+               they bound. -->
+          <div class="gutter-wrap">
+            <canvas id="spec-axis" class="gutter"></canvas>
+            <input
+              id="max-hz"
+              class="hz-edit hz-edit-top"
+              type="number"
+              min="100"
+              step="100"
+              value="6000"
+              title="Top of frequency range shown (Hz)"
+            />
+            <input
+              id="min-hz"
+              class="hz-edit hz-edit-bottom"
+              type="number"
+              min="0"
+              step="100"
+              value="0"
+              title="Bottom of frequency range shown (Hz)"
+            />
+          </div>
           <div id="spec" class="spec"></div>
           <!-- Contrast, unlabelled: it sits against the image it acts on and
-               its effect is visible as it moves. The other rows carry a spacer
-               of the same width so the time axes stay aligned. -->
-          <div id="contrast" class="rail" title="Contrast"></div>
+               its effect is visible as it moves. The colour scale beside it
+               shows the same window in decibels and moves with it. The other
+               rows carry a spacer of the same width so the time axes stay
+               aligned. -->
+          <div id="contrast" class="rail" title="Contrast">
+            <canvas id="colorscale" class="colorscale" title="Colour scale, in dB"></canvas>
+          </div>
         </div>
       </section>
 
       <!-- Shared time axis, indented past the gutter so both panels align. -->
       <div class="timeaxis-row">
-        <span class="gutter-spacer mono small muted">s</span>
+        <span class="gutter-spacer"></span>
         <div id="timeaxis" class="timeaxis"></div>
         <span class="rail-spacer"></span>
       </div>
@@ -139,49 +200,6 @@
         </div>
       </section>
 
-      <!-- Sources first, then a divider, then the transport proper: what to
-           listen to is chosen before it is played, and the rule keeps the two
-           kinds of control from reading as one undifferentiated row. -->
-      <section class="transport">
-        <button id="mic" class="button icon-button" type="button" title="Record from microphone">
-          <svg class="icon" viewBox="0 0 24 24"><use href="#i-record" /></svg>
-          <span id="mic-label" class="sr-only">Record</span>
-        </button>
-        <label id="open-file" class="button icon-button" for="file" title="Open an audio file">
-          <svg class="icon" viewBox="0 0 24 24"><use href="#i-folder" /></svg>
-          <span class="sr-only">Open audio file</span>
-        </label>
-        <input id="file" type="file" accept="audio/*,.wav,.mp3,.m4a,.flac,.ogg" hidden />
-
-        <span class="divider" role="separator"></span>
-
-        <button id="to-start" class="button icon-button" type="button" title="Jump to start" disabled>
-          <svg class="icon" viewBox="0 0 24 24"><use href="#i-start" /></svg>
-        </button>
-        <button id="play" class="button icon-button" type="button" title="Play / pause" disabled>
-          <svg class="icon" viewBox="0 0 24 24"><use id="play-icon" href="#i-play" /></svg>
-        </button>
-        <!-- Editable: type a timestamp to seek. Reads as plain text until
-             focused, so it stays a readout first and a control second. -->
-        <input
-          id="time"
-          class="mono timefield"
-          type="text"
-          inputmode="decimal"
-          value="0:00.0"
-          spellcheck="false"
-          aria-label="Playback position — type seconds or MM:SS.SS to seek"
-          title="Type seconds or MM:SS.SS to seek"
-        />
-
-        <span class="grow"></span>
-
-        <label class="inline small" title="Playback gain — centre is unity, up to 3×">
-          <svg class="icon muted" viewBox="0 0 24 24"><use href="#i-volume" /></svg>
-          <input id="volume" type="range" min="0" max="1" step="0.005" value="0.5" />
-          <output id="volume-out" class="mono small">1.0×</output>
-        </label>
-      </section>
     </main>
 
     <script type="module" src="/src/main.ts"></script>

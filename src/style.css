@@ -1,5 +1,6 @@
-/* SeeNote's palette and layout, trimmed to one screen: spectrogram on top, a
-   shared time axis, buzzdetect results below, transport at the bottom. */
+/* SeeNote's palette and layout, trimmed to one screen: the header bar carries
+   both the source/transport controls and the title, then the spectrogram, a
+   shared time axis, and buzzdetect results below. */
 
 :root {
   --bg: #070b14;
@@ -9,7 +10,7 @@
   --muted: #94a3b8;
   --accent: #38bdf8;
   --gutter: 50px;
-  --rail: 26px;
+  --rail: 74px;
   color-scheme: dark;
 }
 
@@ -249,9 +250,52 @@ input[type='range'] {
   width: var(--gutter);
   display: block;
 }
+/* Wraps the frequency axis canvas so the Hz range boxes can sit on top of it,
+   at the ends of the scale they set. */
+.gutter-wrap {
+  position: relative;
+  flex: none;
+  width: var(--gutter);
+}
+.gutter-wrap .gutter {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+}
 .acts-row {
   flex: none;
   height: 150px;
+}
+
+/* Docked on the axis rather than in the panel head, so the number typed is
+   read right where it takes effect: high end at the top of the scale, low
+   end at the bottom. Sized to the gutter rather than a fixed width so it
+   tracks --gutter if that ever changes. */
+.hz-edit {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  background: rgba(11, 18, 32, 0.85);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 1px 3px;
+  font: 10px/1.4 ui-monospace, monospace;
+  text-align: right;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.hz-edit::-webkit-outer-spin-button,
+.hz-edit::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+.hz-edit-top {
+  top: 2px;
+}
+.hz-edit-bottom {
+  bottom: 2px;
 }
 
 .spec {
@@ -273,8 +317,25 @@ input[type='range'] {
 }
 .rail {
   position: relative;
-  padding: 8px 0;
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  padding: 8px 4px;
   touch-action: none;
+}
+/* The dB legend for the contrast window: a narrow colour ramp plus its tick
+   labels, redrawn whenever the contrast sliders move so it always shows the
+   window actually applied to the spectrogram. */
+.colorscale {
+  flex: none;
+  align-self: center;
+  width: 42px;
+  display: block;
+}
+/* What's left for the dualrange thumb (14px) to move in. */
+#contrast .dualrange {
+  flex: 1;
+  min-width: 16px;
 }
 .spec canvas {
   position: absolute;
@@ -337,19 +398,6 @@ input[type='range'] {
   top: -4px;
   height: 4px;
   border-left: 1px solid rgba(148, 163, 184, 0.4);
-}
-
-.transport {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 8px 10px;
-  margin-top: 10px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  flex: none;
-  flex-wrap: wrap;
 }
 
 /* Two-thumb vertical slider (ui/rangeSlider.ts). Positioned in percentages from

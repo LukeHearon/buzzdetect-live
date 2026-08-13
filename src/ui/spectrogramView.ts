@@ -17,7 +17,7 @@
  * and the gesture stutters on a slow machine.
  */
 
-import { bandForHz, type SpectrogramData } from '../dsp/spectrogram';
+import { bandForHz, DB_CEIL, DB_FLOOR, type SpectrogramData } from '../dsp/spectrogram';
 import { hertzToMel, melToHertz } from '../dsp/melspec';
 import { colormap, levelTable, type ColormapName } from './colormap';
 import { Viewport, type Selection } from './viewport';
@@ -51,6 +51,7 @@ export class SpectrogramView {
   readonly base: HTMLCanvasElement;
   readonly overlay: HTMLCanvasElement;
   readonly axis: HTMLCanvasElement;
+  readonly colorscale: HTMLCanvasElement;
   readonly viewport = new Viewport();
   settings: SpectrogramSettings = { ...DEFAULT_SETTINGS };
 
@@ -58,6 +59,7 @@ export class SpectrogramView {
   private baseCtx: CanvasRenderingContext2D;
   private overlayCtx: CanvasRenderingContext2D;
   private axisCtx: CanvasRenderingContext2D;
+  private colorscaleCtx: CanvasRenderingContext2D;
   private image: ImageData | null = null;
   private bandForRow = new Int32Array(0);
   private dpr = 1;
@@ -67,7 +69,7 @@ export class SpectrogramView {
   /** Time at the left edge of that image, which the blit keeps exact. */
   private drawnStart = 0;
 
-  constructor(container: HTMLElement, axis: HTMLCanvasElement) {
+  constructor(container: HTMLElement, axis: HTMLCanvasElement, colorscale: HTMLCanvasElement) {
     this.base = document.createElement('canvas');
     this.overlay = document.createElement('canvas');
     this.base.className = 'spec-base';
@@ -79,6 +81,8 @@ export class SpectrogramView {
     this.overlayCtx = this.overlay.getContext('2d')!;
     this.axis = axis;
     this.axisCtx = axis.getContext('2d')!;
+    this.colorscale = colorscale;
+    this.colorscaleCtx = colorscale.getContext('2d')!;
   }
 
   setData(data: SpectrogramData | null): void {
@@ -120,6 +124,16 @@ export class SpectrogramView {
     this.axis.height = h;
     this.axis.style.width = `${axisWidth}px`;
     this.axis.style.height = `${cssHeight}px`;
+
+    // The colorscale's width comes from CSS (it sits in the fixed-width
+    // contrast rail). Its height is deliberately less than the full column,
+    // centred by `align-self: center`, so the end labels have somewhere to
+    // sit that isn't the rail's own clipped edge.
+    const colorscaleWidth = this.colorscale.clientWidth;
+    const colorscaleCssHeight = Math.max(20, cssHeight - 40);
+    this.colorscale.width = Math.max(1, Math.round(colorscaleWidth * this.dpr));
+    this.colorscale.height = Math.max(1, Math.round(colorscaleCssHeight * this.dpr));
+    this.colorscale.style.height = `${colorscaleCssHeight}px`;
 
     this.bandForRow = new Int32Array(h);
     this.viewport.width = cssWidth;
@@ -183,6 +197,7 @@ export class SpectrogramView {
 
     if (!data || data.columns === 0) {
       this.drawAxis();
+      this.drawColorscale();
       baseCtx.fillStyle = '#0b1220';
       baseCtx.fillRect(0, 0, base.width, base.height);
       this.drawnKey = '';
@@ -228,6 +243,7 @@ export class SpectrogramView {
     // Full repaint: something other than the view's position changed, or the
     // view jumped further than its own width.
     this.drawAxis();
+    this.drawColorscale();
     this.updateRowTable();
     this.renderColumns(0, w, this.viewport.start);
     baseCtx.putImageData(image, 0, 0);
@@ -368,18 +384,68 @@ export class SpectrogramView {
 
     const { minHz, maxHz } = this.settings;
     // Round frequencies rather than even spacing, since the axis is warped and
-    // even spacing would land on unreadable numbers.
+    // even spacing would land on unreadable numbers. Strictly between the
+    // endpoints: those are shown by the editable Hz boxes docked over the
+    // axis, not redrawn here.
     const candidates = [0, 100, 200, 500, 1000, 2000, 3000, 4000, 6000, 8000, 12000, 16000, 24000];
     let lastY = -Infinity;
     for (const hz of candidates) {
-      if (hz < minHz || hz > maxHz) continue;
+      if (hz <= minHz || hz >= maxHz) continue;
       const y = this.hzToY(hz, h);
-      if (y < 8 || y > h - 6) continue;
+      if (y < 20 || y > h - 20) continue;
       // Skip labels that would collide near the compressed top of the axis.
       if (Math.abs(y - lastY) < 13) continue;
       lastY = y;
       ctx.fillText(hz >= 1000 ? `${hz / 1000}k` : `${hz}`, w - 6, y);
     }
+  }
+
+  /**
+   * dB colour legend beside the contrast rail: the same colormap and level
+   * window (`levelTable`) used for the spectrogram pixels, so the bar always
+   * shows exactly what the image's colours mean. Redrawn whenever the
+   * contrast sliders move, since minByte/maxByte are part of `contentKey()`.
+   */
+  drawColorscale(): void {
+    const ctx = this.colorscaleCtx;
+    const w = this.colorscale.width / this.dpr;
+    const h = this.colorscale.height / this.dpr;
+    if (w === 0 || h === 0) return;
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    const barW = Math.max(1, Math.min(10, w - 24));
+    const lut = colormap(this.settings.colormap);
+    const { minByte, maxByte } = this.settings;
+    const levels = levelTable(minByte, maxByte);
+
+    // Byte 255 at the top, to match "loud is up" on the spectrogram itself.
+    for (let y = 0; y < h; y++) {
+      const byte = Math.round(255 * (1 - y / Math.max(1, h - 1)));
+      const idx = levels[byte] * 3;
+      ctx.fillStyle = `rgb(${lut[idx]}, ${lut[idx + 1]}, ${lut[idx + 2]})`;
+      ctx.fillRect(0, y, barW, 1);
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0.5, 0.5, barW - 1, h - 1);
+
+    // Inset from the very top/bottom edge so the end labels' glyphs aren't
+    // clipped by the canvas boundary.
+    const inset = 5;
+    const dbAt = (byte: number) => DB_FLOOR + (byte / 255) * (DB_CEIL - DB_FLOOR);
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.font = '9px system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    const labelX = barW + 4;
+    ctx.textBaseline = 'top';
+    ctx.fillText(`${DB_CEIL}`, labelX, inset);
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${Math.round(dbAt(128))}`, labelX, h / 2);
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(`${DB_FLOOR}`, labelX, h - inset);
+
+    this.colorscale.title = `Colour scale, in dBFS (window: ${Math.round(dbAt(minByte))} to ${Math.round(dbAt(maxByte))})`;
   }
 
   /** Canvas y for a frequency, on the mel axis. */
