@@ -20,7 +20,7 @@ import { Player, sliderToGain, gainToSlider } from './audio/player';
 import { BUZZ_INDEX, CLASSES } from './model/session';
 import { SpectrogramView } from './ui/spectrogramView';
 import { ActivationStore, ActivationView, colorFor } from './ui/activationView';
-import { formatTime, formatTimeShort, normalizeSelection, type Selection } from './ui/viewport';
+import { formatTimeShort, normalizeSelection, type Selection } from './ui/viewport';
 import { LiveSession, LIVE_STORE_PATCHES } from './live/liveSession';
 import type { WorkerResponse } from './workers/analysis.worker';
 
@@ -34,7 +34,6 @@ const els = {
   meterFill: $('meter-fill'),
   status: $('status'),
   filename: $('filename'),
-  readout: $('readout'),
   minHz: $<HTMLInputElement>('min-hz'),
   maxHz: $<HTMLInputElement>('max-hz'),
   levelMin: $<HTMLInputElement>('level-min'),
@@ -89,6 +88,8 @@ worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
   const msg = e.data;
   switch (msg.type) {
     case 'ready':
+      // The header starts on "Loading model…"; this is when it stops being true.
+      setStatus('');
       break;
 
     case 'spectrogram':
@@ -188,10 +189,10 @@ async function loadFile(file: File): Promise<void> {
 
     const decoded = await decodeForAnalysis(file);
     if (decoded.peak < 1e-4) {
-      setStatus('Decoded audio is silent — the browser may not support this file', 'error');
+      setStatus('Decoded audio is silent; the browser may not support this file', 'error');
     }
     if (decoded.duration > LONG_FILE_SECONDS) {
-      setStatus(`Long file (${(decoded.duration / 60).toFixed(0)} min) — analysing…`, 'busy');
+      setStatus(`Long file: ${(decoded.duration / 60).toFixed(0)} min`, 'busy');
     }
 
     mediaUrl = decoded.url;
@@ -236,12 +237,6 @@ for (const area of [els.spec, els.acts]) {
     overlayDirty = true;
 
     const t = spec.viewport.xToTime(x);
-    if (!onActs) {
-      const hz = spec.yToHz(offsetY(e, area), area.clientHeight);
-      els.readout.textContent = `${formatTime(Math.max(0, t))} · ${Math.round(hz)} Hz`;
-    } else {
-      els.readout.textContent = formatTime(Math.max(0, t));
-    }
 
     if (dragging) {
       if (Math.abs(t - dragging.startTime) > 0.002) dragging.moved = true;
@@ -279,7 +274,6 @@ for (const area of [els.spec, els.acts]) {
 
   area.addEventListener('pointerleave', () => {
     hoverX = null;
-    els.readout.textContent = '';
     overlayDirty = true;
   });
 
@@ -347,9 +341,6 @@ document.addEventListener('keydown', (e) => {
 function offsetX(e: PointerEvent | WheelEvent, area: HTMLElement): number {
   return e.clientX - area.getBoundingClientRect().left;
 }
-function offsetY(e: PointerEvent, area: HTMLElement): number {
-  return e.clientY - area.getBoundingClientRect().top;
-}
 
 // -------------------------------------------------------------- controls ---
 
@@ -413,9 +404,7 @@ function updateDetectionCount(): void {
     return;
   }
   const n = store.countDetections(CLASS_INDEX, acts.threshold);
-  els.detectionCount.textContent =
-    `${n} of ${store.filled} frames above threshold ` +
-    `(${(n * store.patchHopSeconds).toFixed(1)}s)`;
+  els.detectionCount.textContent = `${n} detections from ${store.filled} frames`;
 }
 
 // ------------------------------------------------------------- rendering ---
@@ -570,11 +559,11 @@ els.mic.addEventListener('click', async () => {
 
     await session.start();
 
-    els.micLabel.textContent = 'Stop listening';
+    els.micLabel.textContent = 'Stop';
     els.mic.classList.add('on');
     els.mic.querySelector('use')?.setAttribute('href', '#i-stop');
     els.liveBadge.hidden = false;
-    setStatus('Listening — first result after 0.96 s', 'busy');
+    setStatus('Listening…', 'busy');
   } catch (err) {
     setStatus(
       err instanceof Error ? `Microphone unavailable: ${err.message}` : String(err),
@@ -611,17 +600,16 @@ async function stopLive(): Promise<void> {
     els.toStart.disabled = false;
     spec.viewport.duration = samples.length / sampleRate;
     spec.viewport.clamp();
-    els.filename.textContent =
-      `Microphone recording — ${(samples.length / sampleRate).toFixed(1)}s` +
-      (startSeconds > 0 ? ' (most recent 5 minutes)' : '');
+    // The live buffer is bounded, so say so when the earlier audio is gone.
+    els.filename.textContent = startSeconds > 0 ? 'Recorded audio (last 5 min)' : 'Recorded audio';
   }
 
-  els.micLabel.textContent = 'Live microphone';
+  els.micLabel.textContent = 'Record';
   els.mic.classList.remove('on');
   els.mic.querySelector('use')?.setAttribute('href', '#i-mic');
   els.liveBadge.hidden = true;
   els.meterFill.style.width = '0%';
-  setStatus('Stopped — the recording is here to play back');
+  setStatus('');
   spec.invalidate();
   actsDirty = true;
 }
@@ -630,4 +618,3 @@ async function stopLive(): Promise<void> {
 
 resize();
 requestAnimationFrame(frame);
-setStatus('Ready — open an audio file or start the microphone');

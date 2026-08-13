@@ -60,10 +60,23 @@ body {
   flex: none;
 }
 
-.brand {
-  display: flex;
-  gap: 8px;
-  align-items: baseline;
+/* Magma, the spectrogram's own ramp, clipped to the wordmark. Stops are
+   MAGMA_STOPS from ui/colormap.ts, entered at its purple mid-point: the true
+   dark end is near-black and would vanish into the bar. */
+.brand strong {
+  background: linear-gradient(
+    90deg,
+    #7a2382 0%,
+    #b5367a 30%,
+    #e55064 58%,
+    #fb8761 80%,
+    #fec287 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  letter-spacing: 0.01em;
+  font-size: 15px;
 }
 
 .group {
@@ -300,12 +313,6 @@ input[type='range'] {
   flex-wrap: wrap;
 }
 
-.hint {
-  margin: 8px 0 0;
-  text-align: center;
-  flex: none;
-}
-
 /* Icons and numeric inputs */
 .icon {
   width: 15px;
@@ -327,6 +334,8 @@ input[type='range'] {
   align-items: center;
   gap: 7px;
 }
+/* Typed, not stepped: the spinners invite one-nudge-at-a-time edits and eat
+   width the values need. Arrow keys still step. */
 .num {
   width: 62px;
   background: #16213a;
@@ -335,7 +344,16 @@ input[type='range'] {
   border-radius: 4px;
   padding: 3px 5px;
   font: 12px/1 ui-monospace, monospace;
+  appearance: textfield;
+  -moz-appearance: textfield;
 }
+.num::-webkit-outer-spin-button,
+.num::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+
 .series {
   font-family: ui-monospace, monospace;
 }

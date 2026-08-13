@@ -306,11 +306,4 @@ export class SpectrogramView {
     const hiMel = hertzToMel(this.settings.maxHz);
     return ((hiMel - hertzToMel(hz)) / (hiMel - loMel)) * cssHeight;
   }
-
-  /** Frequency at a canvas y position, for the readout. */
-  yToHz(y: number, cssHeight: number): number {
-    const loMel = hertzToMel(this.settings.minHz);
-    const hiMel = hertzToMel(this.settings.maxHz);
-    return melToHertz(hiMel - ((hiMel - loMel) * y) / Math.max(1, cssHeight));
-  }
 }

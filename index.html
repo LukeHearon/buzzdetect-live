@@ -32,14 +32,14 @@
     </svg>
 
     <header class="bar">
-      <div class="brand"><strong>buzzdetect</strong><span class="muted">web demo</span></div>
+      <div class="brand"><strong>buzzdetect live!</strong></div>
 
       <div class="group">
         <label class="button" for="file">Open audio…</label>
         <input id="file" type="file" accept="audio/*,.wav,.mp3,.m4a,.flac,.ogg" hidden />
-        <button id="mic" class="button icon-button" type="button" title="Live microphone">
+        <button id="mic" class="button icon-button" type="button" title="Record from microphone">
           <svg class="icon" viewBox="0 0 24 24"><use href="#i-mic" /></svg>
-          <span id="mic-label">Live microphone</span>
+          <span id="mic-label">Record</span>
         </button>
       </div>
 
@@ -56,6 +56,14 @@
       <!-- Spectrogram: frequency gutter, then the plot. -->
       <section class="panel plot">
         <div class="panel-head">
+          <!-- Volume sits at the head of this row rather than beside the
+               transport, so it lines up over the playback buttons and the row
+               holds every continuous control. -->
+          <label class="inline small" title="Playback gain — centre is unity, up to 3×">
+            <svg class="icon muted" viewBox="0 0 24 24"><use href="#i-volume" /></svg>
+            <input id="volume" type="range" min="0" max="1" step="0.005" value="0.5" />
+            <output id="volume-out" class="mono small">1.0×</output>
+          </label>
           <span id="filename" class="muted">No file loaded</span>
           <span class="grow"></span>
           <label class="inline small">
@@ -69,7 +77,6 @@
             <input id="level-min" type="range" min="0" max="255" step="1" value="53" />
             <input id="level-max" type="range" min="0" max="255" step="1" value="200" />
           </label>
-          <span id="readout" class="mono small muted"></span>
         </div>
         <div class="plotrow">
           <canvas id="spec-axis" class="gutter"></canvas>
@@ -108,20 +115,8 @@
           <svg class="icon" viewBox="0 0 24 24"><use id="play-icon" href="#i-play" /></svg>
         </button>
         <span id="time" class="mono">0:00.0</span>
-
         <span class="grow"></span>
-
-        <label class="inline" title="Playback gain — centre is unity, up to 3×">
-          <svg class="icon muted" viewBox="0 0 24 24"><use href="#i-volume" /></svg>
-          <input id="volume" type="range" min="0" max="1" step="0.005" value="0.5" />
-          <output id="volume-out" class="mono small">1.0×</output>
-        </label>
       </section>
-
-      <p class="hint muted small">
-        Drag to select · click a frame to select it · wheel to zoom · two-finger swipe to pan ·
-        space to play/pause · filled dots are frames above threshold · nothing leaves your machine
-      </p>
     </main>
 
     <script type="module" src="/src/main.ts"></script>
