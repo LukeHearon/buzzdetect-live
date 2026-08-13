@@ -9,6 +9,7 @@
   --muted: #94a3b8;
   --accent: #38bdf8;
   --gutter: 50px;
+  --rail: 26px;
   color-scheme: dark;
 }
 
@@ -260,6 +261,21 @@ input[type='range'] {
   cursor: crosshair;
   touch-action: none;
 }
+
+/* The contrast rail, and the matching dead space the other rows reserve for it.
+   Both read the same variable: the spectrogram, the activation plot and the
+   time axis must span identical pixel widths or their shared time axis stops
+   lining up. */
+.rail,
+.rail-spacer {
+  flex: none;
+  width: var(--rail);
+}
+.rail {
+  position: relative;
+  padding: 8px 0;
+  touch-action: none;
+}
 .spec canvas {
   position: absolute;
   inset: 0;
@@ -331,6 +347,85 @@ input[type='range'] {
   border-radius: 6px;
   flex: none;
   flex-wrap: wrap;
+}
+
+/* Two-thumb vertical slider (ui/rangeSlider.ts). Positioned in percentages from
+   the bottom, so the value axis runs upwards the way the image beside it does. */
+.dualrange {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.dualrange-track,
+.dualrange-fill {
+  position: absolute;
+  left: 50%;
+  width: 4px;
+  transform: translateX(-50%);
+  border-radius: 2px;
+}
+.dualrange-track {
+  top: 0;
+  bottom: 0;
+  background: #16213a;
+  border: 1px solid var(--line);
+}
+.dualrange-fill {
+  background: var(--accent);
+  opacity: 0.55;
+}
+.dualrange-thumb {
+  position: absolute;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  /* Centred on its own value, so the thumb's middle marks the level rather
+     than its edge. */
+  transform: translate(-50%, 50%);
+  border: 1px solid #64748b;
+  border-radius: 50%;
+  background: var(--text);
+  cursor: grab;
+  touch-action: none;
+}
+.dualrange-thumb:active {
+  cursor: grabbing;
+}
+.dualrange-thumb:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Separates the source controls from the transport controls. */
+.divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 4px;
+  background: var(--line);
+}
+
+/* A readout that happens to be editable: no field chrome until it is focused. */
+.timefield {
+  width: 8ch;
+  padding: 3px 5px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: center;
+}
+.timefield:hover {
+  border-color: var(--line);
+}
+.timefield:focus {
+  background: #16213a;
+  border-color: var(--accent);
+  outline: none;
+}
+.timefield.invalid {
+  border-color: #b91c1c;
 }
 
 /* Icons and numeric inputs */

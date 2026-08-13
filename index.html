@@ -54,14 +54,6 @@
       <!-- Spectrogram: frequency gutter, then the plot. -->
       <section class="panel plot">
         <div class="panel-head">
-          <!-- Volume sits at the head of this row rather than beside the
-               transport, so it lines up over the playback buttons and the row
-               holds every continuous control. -->
-          <label class="inline small" title="Playback gain — centre is unity, up to 3×">
-            <svg class="icon muted" viewBox="0 0 24 24"><use href="#i-volume" /></svg>
-            <input id="volume" type="range" min="0" max="1" step="0.005" value="0.5" />
-            <output id="volume-out" class="mono small">1.0×</output>
-          </label>
           <span id="filename" class="muted">No file loaded</span>
           <span class="grow"></span>
           <label class="inline small">
@@ -70,15 +62,14 @@
             <span class="muted">–</span>
             <input id="max-hz" class="num" type="number" min="100" step="100" value="6000" />
           </label>
-          <label class="inline small">
-            Contrast
-            <input id="level-min" type="range" min="0" max="255" step="1" value="53" />
-            <input id="level-max" type="range" min="0" max="255" step="1" value="200" />
-          </label>
         </div>
         <div class="plotrow">
           <canvas id="spec-axis" class="gutter"></canvas>
           <div id="spec" class="spec"></div>
+          <!-- Contrast, unlabelled: it sits against the image it acts on and
+               its effect is visible as it moves. The other rows carry a spacer
+               of the same width so the time axes stay aligned. -->
+          <div id="contrast" class="rail" title="Contrast"></div>
         </div>
       </section>
 
@@ -86,6 +77,7 @@
       <div class="timeaxis-row">
         <span class="gutter-spacer mono small muted">s</span>
         <div id="timeaxis" class="timeaxis"></div>
+        <span class="rail-spacer"></span>
       </div>
 
       <!-- buzzdetect results, on the same time axis. -->
@@ -102,31 +94,52 @@
         <div class="plotrow acts-row">
           <canvas id="acts-axis" class="gutter"></canvas>
           <div id="acts" class="acts"></div>
+          <span class="rail-spacer"></span>
         </div>
       </section>
 
+      <!-- Sources first, then a divider, then the transport proper: what to
+           listen to is chosen before it is played, and the rule keeps the two
+           kinds of control from reading as one undifferentiated row. -->
       <section class="transport">
+        <button id="mic" class="button icon-button" type="button" title="Record from microphone">
+          <svg class="icon" viewBox="0 0 24 24"><use href="#i-record" /></svg>
+          <span id="mic-label" class="sr-only">Record</span>
+        </button>
+        <label class="button icon-button" for="file" title="Open an audio file">
+          <svg class="icon" viewBox="0 0 24 24"><use href="#i-folder" /></svg>
+          <span class="sr-only">Open audio file</span>
+        </label>
+        <input id="file" type="file" accept="audio/*,.wav,.mp3,.m4a,.flac,.ogg" hidden />
+
+        <span class="divider" role="separator"></span>
+
         <button id="to-start" class="button icon-button" type="button" title="Jump to start" disabled>
           <svg class="icon" viewBox="0 0 24 24"><use href="#i-start" /></svg>
         </button>
         <button id="play" class="button icon-button" type="button" title="Play / pause" disabled>
           <svg class="icon" viewBox="0 0 24 24"><use id="play-icon" href="#i-play" /></svg>
         </button>
-        <span id="time" class="mono">0:00.0</span>
+        <!-- Editable: type a timestamp to seek. Reads as plain text until
+             focused, so it stays a readout first and a control second. -->
+        <input
+          id="time"
+          class="mono timefield"
+          type="text"
+          inputmode="decimal"
+          value="0:00.0"
+          spellcheck="false"
+          aria-label="Playback position — type seconds or MM:SS.SS to seek"
+          title="Type seconds or MM:SS.SS to seek"
+        />
+
         <span class="grow"></span>
 
-        <!-- Sources, at the far end of the transport: they act on what is
-             loaded rather than on playback, so they sit apart from the
-             transport buttons instead of among them. -->
-        <label class="button icon-button" for="file" title="Open an audio file">
-          <svg class="icon" viewBox="0 0 24 24"><use href="#i-folder" /></svg>
-          <span class="sr-only">Open audio file</span>
+        <label class="inline small" title="Playback gain — centre is unity, up to 3×">
+          <svg class="icon muted" viewBox="0 0 24 24"><use href="#i-volume" /></svg>
+          <input id="volume" type="range" min="0" max="1" step="0.005" value="0.5" />
+          <output id="volume-out" class="mono small">1.0×</output>
         </label>
-        <input id="file" type="file" accept="audio/*,.wav,.mp3,.m4a,.flac,.ogg" hidden />
-        <button id="mic" class="button icon-button" type="button" title="Record from microphone">
-          <svg class="icon" viewBox="0 0 24 24"><use href="#i-record" /></svg>
-          <span id="mic-label" class="sr-only">Record</span>
-        </button>
       </section>
     </main>
 

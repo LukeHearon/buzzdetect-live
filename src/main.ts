@@ -22,6 +22,7 @@ import { SpectrogramView } from './ui/spectrogramView';
 import { ActivationStore, ActivationView, colorFor } from './ui/activationView';
 import { formatTimeShort, normalizeSelection, type Selection } from './ui/viewport';
 import { LiveSession, LIVE_STORE_PATCHES } from './live/liveSession';
+import { createDualRange } from './ui/rangeSlider';
 import type { WorkerResponse } from './workers/analysis.worker';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -36,8 +37,7 @@ const els = {
   filename: $('filename'),
   minHz: $<HTMLInputElement>('min-hz'),
   maxHz: $<HTMLInputElement>('max-hz'),
-  levelMin: $<HTMLInputElement>('level-min'),
-  levelMax: $<HTMLInputElement>('level-max'),
+  contrast: $('contrast'),
   spec: $('spec'),
   specAxis: $<HTMLCanvasElement>('spec-axis'),
   timeaxis: $('timeaxis'),
@@ -48,7 +48,7 @@ const els = {
   toStart: $<HTMLButtonElement>('to-start'),
   play: $<HTMLButtonElement>('play'),
   playIcon: document.getElementById('play-icon') as unknown as SVGUseElement,
-  time: $('time'),
+  time: $<HTMLInputElement>('time'),
   volume: $<HTMLInputElement>('volume'),
   volumeOut: $<HTMLOutputElement>('volume-out'),
   series: $('series'),
@@ -372,13 +372,87 @@ for (const el of [els.minHz, els.maxHz]) {
   });
 }
 
-for (const el of [els.levelMin, els.levelMax]) {
-  el.addEventListener('input', () => {
-    spec.settings.minByte = Math.min(Number(els.levelMin.value), Number(els.levelMax.value) - 1);
-    spec.settings.maxByte = Number(els.levelMax.value);
-    spec.invalidate();
-  });
+// Contrast: one control for a window, rather than two sliders that can be
+// dragged past each other. The gap is what the old code enforced by hand with
+// a Math.min on every input.
+els.contrast.append(
+  createDualRange({
+    min: 0,
+    max: 255,
+    step: 1,
+    gap: 1,
+    values: [spec.settings.minByte, spec.settings.maxByte],
+    label: 'Contrast',
+    onInput: (lowByte, highByte) => {
+      spec.settings.minByte = lowByte;
+      spec.settings.maxByte = highByte;
+      spec.invalidate();
+    },
+  }).element,
+);
+
+/**
+ * Accepts both of the forms the field can show and a person can mean: raw
+ * seconds ("93.5"), MM:SS.SS as displayed, and H:MM:SS for a long recording.
+ * Returns null rather than NaN for anything else, so a typo is refused instead
+ * of seeking somewhere arbitrary.
+ */
+function parseTimestamp(text: string): number | null {
+  const parts = text.trim().split(':');
+  if (parts.length > 3) return null;
+  let seconds = 0;
+  for (const part of parts) {
+    if (!/^\d+(\.\d+)?$/.test(part)) return null;
+    seconds = seconds * 60 + Number(part);
+  }
+  return Number.isFinite(seconds) ? seconds : null;
 }
+
+/** Writes the readout, unless it is being typed into. */
+function showTime(seconds: number): void {
+  if (document.activeElement === els.time) return;
+  els.time.value = formatTimeShort(seconds);
+}
+
+function commitTime(): boolean {
+  const seconds = parseTimestamp(els.time.value);
+  if (seconds === null) {
+    els.time.classList.add('invalid');
+    return false;
+  }
+  els.time.classList.remove('invalid');
+  const vp = spec.viewport;
+  player.currentTime = Math.max(0, Math.min(seconds, vp.duration));
+  // Centre the view the way playback does, so a seek off-screen brings its
+  // destination into view instead of leaving the playhead somewhere unseen.
+  vp.start = player.currentTime - vp.visibleSeconds / 2;
+  vp.clamp();
+  spec.invalidate();
+  actsDirty = true;
+  overlayDirty = true;
+  return true;
+}
+
+els.time.addEventListener('focus', () => els.time.select());
+els.time.addEventListener('input', () => els.time.classList.remove('invalid'));
+els.time.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (commitTime()) els.time.blur();
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    els.time.classList.remove('invalid');
+    els.time.blur();
+  }
+});
+els.time.addEventListener('blur', () => {
+  // Leaving the field is not a way to enter a bad value: commit what parses,
+  // and otherwise fall back to where the playhead actually is.
+  if (!commitTime()) {
+    els.time.classList.remove('invalid');
+    els.time.value = formatTimeShort(player.currentTime);
+  }
+});
 
 els.play.addEventListener('click', () => void player.toggle());
 els.toStart.addEventListener('click', () => {
@@ -472,7 +546,7 @@ function frame(): void {
       spec.invalidate();
       actsDirty = true;
       els.meterFill.style.width = `${Math.min(100, live.level * 140)}%`;
-      els.time.textContent = formatTimeShort(vp.duration);
+      showTime(vp.duration);
     }
   }
 
@@ -490,7 +564,7 @@ function frame(): void {
       vp.start = player.currentTime - vp.visibleSeconds / 2;
       vp.clamp();
     }
-    els.time.textContent = formatTimeShort(player.currentTime);
+    showTime(player.currentTime);
     overlayDirty = true;
   }
 
