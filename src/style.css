@@ -397,6 +397,70 @@ input[type='range'] {
   outline-offset: 2px;
 }
 
+/* With nothing loaded, the two source buttons are the only things worth
+   pressing, so they breathe until one of them is used. Slow and low-contrast on
+   purpose: this is a hint, not an alarm. */
+@keyframes source-pulse {
+  50% {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.16);
+  }
+}
+.needs-source {
+  animation: source-pulse 2.4s ease-in-out infinite;
+}
+/* Respect a stated preference for stillness: keep the highlight, drop the
+   motion, so the hint survives without the animation. */
+@media (prefers-reduced-motion: reduce) {
+  .needs-source {
+    animation: none;
+    border-color: var(--accent);
+  }
+}
+
+/* Help. A native <dialog>, so Escape, focus handling and the backdrop are the
+   platform's problem rather than ours. */
+.help {
+  max-width: 46ch;
+  padding: 18px 22px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+}
+.help::backdrop {
+  background: rgba(4, 8, 16, 0.72);
+}
+.help h2 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+.help h3 {
+  margin: 16px 0 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.help p,
+.help li {
+  margin: 4px 0;
+  line-height: 1.5;
+}
+.help ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.help code {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--accent);
+}
+.help form {
+  margin-top: 18px;
+  text-align: right;
+}
+
 /* Separates the source controls from the transport controls. */
 .divider {
   width: 1px;

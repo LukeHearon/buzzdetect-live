@@ -7,6 +7,8 @@ microphone and watch both update live.
 
 Nothing is uploaded. The file is decoded and analysed in the tab.
 
+Live at [lukehearon.com/buzzdetect-live](https://lukehearon.com/buzzdetect-live).
+
 ```
 npm install
 npm run dev      # http://localhost:5180
@@ -90,9 +92,15 @@ Design choices that follow from caring about this:
 - **The mel filterbank is stored banded**, not as a 257x64 matrix that is 97%
   zeros — ~500 multiply-adds per frame instead of ~16,000.
 - **The spectrogram is computed once into a byte buffer**, so panning and
-  zooming are pure blitting with no FFT on the interaction path. `chooseHop`
-  widens the hop for long files so the buffer stays under 64 MB whatever gets
-  dropped in.
+  zooming never touch an FFT — they re-read the buffer, not the audio.
+  `chooseHop` widens the hop for long files so the buffer stays under 64 MB
+  whatever gets dropped in.
+- **Scrolling is a blit.** Playback and live capture move the view every frame,
+  and the image is already correct — only its position changes. The canvas is
+  shifted onto itself and just the strip that scrolled into view is recomputed,
+  turning a per-frame cost of width×height into a handful of columns. That is
+  what lets the display run uncapped instead of the 30 Hz it needed when every
+  frame was a full repaint.
 - **The pixel loop caps how many columns it reads per screen pixel**, so zooming
   all the way out on a long file stays interactive.
 - **All heavy work is in a worker**, and drawing is one rAF loop with dirty
@@ -132,7 +140,7 @@ src/workers/analysis.worker.ts   spectrogram, then streaming inference
 src/audio/decode.ts       file -> 16 kHz mono + a blob URL for playback
 src/audio/player.ts       <audio>-backed transport
 src/live/liveSession.ts   microphone capture and scrolling spectrogram
-src/ui/                   viewport, colormap, spectrogram and activation canvases
+src/ui/                   viewport, colormap, canvases, two-thumb range slider
 src/parity.ts             the in-browser parity check
 ```
 
@@ -148,6 +156,16 @@ pins the whole thing against TensorFlow's output.
 its outputs are unbounded and do not sum to one. The app plots them in the
 model's own units, as buzzdetect writes them to its `activation_*` columns. The
 default threshold of −1.2 is in those units too.
+
+## Deploying
+
+Built and copied into the site by `buzzdetect-live.sh` in the website repo, as a
+Quarto post-render step: `npm run build -- --base=/buzzdetect-live/` into
+`_site/buzzdetect-live/`, plus a `.htaccess` carrying `COOP`/`COEP` and
+`AddType application/wasm`. The build is skipped when nothing in this repo
+changed. Test built output with `npm run preview` rather than `npm run dev` —
+the model path resolves differently once bundled, and dev has hidden real
+breakage there before.
 
 ## Limits
 

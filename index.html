@@ -48,13 +48,54 @@
 
       <span class="grow"></span>
       <span id="status" class="status">Loading model…</span>
+      <button id="help" class="button icon-button" type="button" title="What this is, and how to drive it">
+        <span aria-hidden="true">?</span>
+        <span class="sr-only">Help</span>
+      </button>
     </header>
+
+    <!-- Native <dialog>: Escape, focus trapping and the backdrop come for free,
+         which is the whole of what this needs. -->
+    <dialog id="help-dialog" class="help">
+      <h2>buzzdetect live</h2>
+      <p>
+        Runs buzzdetect's <code>model_general_v3</code> on audio, entirely in this tab. Nothing is
+        uploaded and nothing leaves the machine.
+      </p>
+
+      <h3>Getting audio in</h3>
+      <ul>
+        <li>Open an audio file, or record from the microphone.</li>
+        <li>Recording keeps the last five minutes; stopping turns it into an ordinary file.</li>
+      </ul>
+
+      <h3>Moving around</h3>
+      <ul>
+        <li>Click to seek. Hold and drag to select a range; press Escape to clear it.</li>
+        <li>Click a bar in the results to select exactly the audio that frame scored.</li>
+        <li>Scroll or pinch to zoom, shift-scroll or swipe sideways to pan.</li>
+        <li>Space plays and pauses; the arrow keys step, and shift makes them step further.</li>
+        <li>Type a position into the time readout, as seconds or <code>MM:SS.SS</code>.</li>
+      </ul>
+
+      <h3>The display</h3>
+      <ul>
+        <li>The spectrogram's vertical axis is mel-spaced, matching what the model sees.</li>
+        <li>The slider beside it sets the contrast window; the Hz boxes set the range shown.</li>
+        <li>
+          Results are the model's raw activation for <code>ins_buzz</code> &mdash; unbounded model
+          units, not probabilities. The threshold is in those same units.
+        </li>
+      </ul>
+
+      <form method="dialog"><button class="button" type="submit">Close</button></form>
+    </dialog>
 
     <main>
       <!-- Spectrogram: frequency gutter, then the plot. -->
       <section class="panel plot">
         <div class="panel-head">
-          <span id="filename" class="muted">No file loaded</span>
+          <span id="filename" class="muted">Open an audio file or record audio to begin</span>
           <span class="grow"></span>
           <label class="inline small">
             Hz
@@ -106,7 +147,7 @@
           <svg class="icon" viewBox="0 0 24 24"><use href="#i-record" /></svg>
           <span id="mic-label" class="sr-only">Record</span>
         </button>
-        <label class="button icon-button" for="file" title="Open an audio file">
+        <label id="open-file" class="button icon-button" for="file" title="Open an audio file">
           <svg class="icon" viewBox="0 0 24 24"><use href="#i-folder" /></svg>
           <span class="sr-only">Open audio file</span>
         </label>

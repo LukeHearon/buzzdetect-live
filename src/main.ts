@@ -30,6 +30,9 @@ const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) 
 const els = {
   file: $<HTMLInputElement>('file'),
   mic: $<HTMLButtonElement>('mic'),
+  openFile: $('open-file'),
+  help: $<HTMLButtonElement>('help'),
+  helpDialog: $<HTMLDialogElement>('help-dialog'),
   micLabel: $('mic-label'),
   liveBadge: $('live-badge'),
   meterFill: $('meter-fill'),
@@ -164,6 +167,18 @@ document.addEventListener('drop', async (e) => {
   if (file) await loadFile(file);
 });
 
+/**
+ * Draws attention to the two source buttons while there is nothing to look at.
+ * They are the only useful controls in an empty session, and the transport
+ * beside them is disabled, so an untouched page otherwise gives no clue where
+ * to start.
+ */
+function updateSourcePrompt(): void {
+  const empty = !hasAudio && !live;
+  els.mic.classList.toggle('needs-source', empty);
+  els.openFile.classList.toggle('needs-source', empty);
+}
+
 /** Clears whatever is loaded, in either mode. */
 function resetSession(): void {
   if (mediaUrl) URL.revokeObjectURL(mediaUrl);
@@ -179,6 +194,7 @@ function resetSession(): void {
   els.toStart.disabled = true;
   actsDirty = true;
   overlayDirty = true;
+  updateSourcePrompt();
 }
 
 async function loadFile(file: File): Promise<void> {
@@ -199,6 +215,7 @@ async function loadFile(file: File): Promise<void> {
     mediaUrl = decoded.url;
     player.load(decoded.url);
     hasAudio = true;
+    updateSourcePrompt();
     spec.viewport.duration = decoded.duration;
     spec.viewport.fit();
     els.play.disabled = false;
@@ -353,6 +370,9 @@ function minPixelsPerSecond(): number {
 document.addEventListener('keydown', (e) => {
   const target = e.target as HTMLElement | null;
   if (target?.tagName === 'INPUT' && (target as HTMLInputElement).type !== 'range') return;
+  // The dialog owns the keyboard while it is up: Escape should close it, not
+  // also clear the selection behind it.
+  if (els.helpDialog.open) return;
 
   switch (e.key) {
     case ' ':
@@ -488,6 +508,8 @@ els.time.addEventListener('blur', () => {
     els.time.value = formatTimeShort(player.currentTime);
   }
 });
+
+els.help.addEventListener('click', () => els.helpDialog.showModal());
 
 els.play.addEventListener('click', () => void player.toggle());
 els.toStart.addEventListener('click', () => {
@@ -647,6 +669,7 @@ els.mic.addEventListener('click', async () => {
     });
 
     live = session;
+    updateSourcePrompt();
     spec.setData(session.data);
     spec.viewport.duration = 0;
     spec.viewport.pixelsPerSecond = 60;
@@ -681,6 +704,7 @@ async function stopLive(): Promise<void> {
   const session = live;
   live = null;
   await session.stop();
+  updateSourcePrompt();
   worker.postMessage({ type: 'liveStop' });
 
   const { samples, startSeconds, sampleRate } = session.takeRecording();
@@ -692,6 +716,7 @@ async function stopLive(): Promise<void> {
     mediaUrl = URL.createObjectURL(encodeWav(samples, sampleRate));
     player.load(mediaUrl);
     hasAudio = true;
+    updateSourcePrompt();
     els.play.disabled = false;
     els.toStart.disabled = false;
     spec.viewport.duration = samples.length / sampleRate;
@@ -714,4 +739,5 @@ async function stopLive(): Promise<void> {
 // ------------------------------------------------------------------ boot ---
 
 resize();
+updateSourcePrompt();
 requestAnimationFrame(frame);
