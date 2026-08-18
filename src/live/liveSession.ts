@@ -78,6 +78,8 @@ export class LiveSession {
   private audio: AudioContext | null = null;
   private stream: MediaStream | null = null;
   private node: AudioWorkletNode | null = null;
+  private gain: GainNode | null = null;
+  private gainValue = 1;
 
   /** Samples captured since the session started. */
   private samplesSeen = 0;
@@ -130,23 +132,41 @@ export class LiveSession {
     );
 
     const source = this.audio.createMediaStreamSource(this.stream);
+    // Input gain, applied before the model sees the audio: quiet mics or
+    // distant sources are otherwise below the level the model was trained on.
+    this.gain = this.audio.createGain();
+    this.gain.gain.value = this.gainValue;
     this.node = new AudioWorkletNode(this.audio, 'capture', {
       numberOfInputs: 1,
       numberOfOutputs: 0,
       channelCount: 1,
     });
     this.node.port.onmessage = (e: MessageEvent<Float32Array>) => this.onBatch(e.data);
-    source.connect(this.node);
+    source.connect(this.gain).connect(this.node);
   }
 
   async stop(): Promise<void> {
     this.node?.disconnect();
+    this.gain?.disconnect();
     this.stream?.getTracks().forEach((t) => t.stop());
     await this.audio?.close();
     this.node = null;
+    this.gain = null;
     this.stream = null;
     this.audio = null;
     this.level = 0;
+  }
+
+  /** Input gain applied before capture. 1 is unity. */
+  get inputGain(): number {
+    return this.gainValue;
+  }
+
+  set inputGain(v: number) {
+    this.gainValue = v;
+    if (this.gain && this.audio) {
+      this.gain.gain.setTargetAtTime(this.gainValue, this.audio.currentTime, 0.01);
+    }
   }
 
   private onBatch(samples: Float32Array): void {

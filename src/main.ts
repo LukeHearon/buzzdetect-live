@@ -58,6 +58,9 @@ const els = {
   time: $<HTMLInputElement>('time'),
   volume: $<HTMLInputElement>('volume'),
   volumeOut: $<HTMLOutputElement>('volume-out'),
+  micGainControl: $('mic-gain-control'),
+  micGain: $<HTMLInputElement>('mic-gain'),
+  micGainOut: $<HTMLOutputElement>('mic-gain-out'),
 };
 
 const spec = new SpectrogramView(els.spec, els.specAxis, els.colorscale);
@@ -722,6 +725,12 @@ els.volume.addEventListener('input', () => {
 });
 els.volume.value = String(gainToSlider(1));
 
+els.micGain.addEventListener('input', () => {
+  const gain = Number(els.micGain.value);
+  els.micGainOut.textContent = `${gain.toFixed(2)}×`;
+  if (live) live.inputGain = gain;
+});
+
 function updateDetectionCount(): void {
   if (store.filled === 0 || shown.length === 0) {
     els.detectionCount.textContent = '';
@@ -887,12 +896,14 @@ els.mic.addEventListener('click', async () => {
     worker.postMessage({ type: 'liveStart' });
 
     await session.start();
+    session.inputGain = Number(els.micGain.value);
 
     els.micLabel.textContent = 'Stop';
     els.mic.title = 'Stop recording';
     els.mic.classList.add('on');
     els.mic.querySelector('use')?.setAttribute('href', '#i-stop');
     els.liveBadge.hidden = false;
+    els.micGainControl.hidden = false;
     setStatus('Listening…', 'busy');
   } catch (err) {
     setStatus(
@@ -941,6 +952,7 @@ async function stopLive(): Promise<void> {
   els.mic.classList.remove('on');
   els.mic.querySelector('use')?.setAttribute('href', '#i-record');
   els.liveBadge.hidden = true;
+  els.micGainControl.hidden = true;
   els.meterFill.style.width = '0%';
   setStatus('');
   spec.invalidate();

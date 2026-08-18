@@ -85,6 +85,12 @@
         <output id="volume-out" class="mono small">1.0×</output>
       </label>
 
+      <label id="mic-gain-control" class="inline small" hidden title="Mic input gain, 0.5×–4×">
+        <svg class="icon muted" viewBox="0 0 24 24"><use href="#i-mic" /></svg>
+        <input id="mic-gain" type="range" min="0.5" max="4" step="0.05" value="1" />
+        <output id="mic-gain-out" class="mono small">1.0×</output>
+      </label>
+
       <span id="live-badge" class="badge" hidden>
         <span class="dot"></span>LIVE
         <span class="meter"><span id="meter-fill"></span></span>
