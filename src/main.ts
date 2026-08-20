@@ -756,53 +756,42 @@ const TOUR_STEPS: TourStep[] = [
   {
     target: 'acts',
     title: 'buzzdetect results',
-    body: "Here are the buzzdetect results. Each point represents a single 'frame' of audio, 0.96 seconds long. buzzdetect outputs one score per frame. The ins_buzz neuron is what detects bee buzzing. We call detections whenever the value is above -1.2; detected frames have a solid ",
+    body: "Here are the buzzdetect results. Each point represents a single 'frame' of audio, 0.96 seconds long. buzzdetect outputs one score per frame. The ins_buzz neuron is what detects bee buzzing. We call detections whenever the value is above -1.2; detected frames have a solid dot and brighter backround. You can click on a frame to select just the audio in that frame.",
     placement: 'top',
   },
   {
     target: 'settings',
     title: 'Neurons',
-    body: 'Pick which classes to plot and set a detection threshold for each. Only ins_buzz is tuned for accuracy; the others are there if you find them useful. Its baseline threshold is -1.2.',
+    body: 'Use this button to plot other neurons (we can detect more than just bee buzzing!) or to fine-tune the detection threshold.',
     placement: 'bottom',
   },
   {
     target: 'legend',
     title: 'Legend',
-    body: 'Shows which classes are currently plotted and their colours; frames above a class’s threshold count toward the detection total shown beside the Neurons button.',
+    body: "Here we can see which neurons we're plotting and their corresponding colors. Above the elgend, you can see the total number of frames and detections in your loaded audio.",
     placement: 'left',
   },
   {
-    title: "That's the tour",
-    body: 'Open your own recording and see what buzzdetect finds. A few things worth trying:',
+    title: "Have fun!",
+    body: "That's the gist! Now try playing around with this demo recording, or make your own recording to see what buzzdetect finds. A few things worth trying:",
     tips: [
-      'Load a file with obvious insect noise and watch ins_buzz light up.',
-      'Nudge its threshold up or down and see the detection count change.',
-      'Record a few seconds live and browse it once capture stops.',
-      'Zoom into a single frame to compare the spectrogram against the model score.',
+      'Try a live recording and watch the buzzdetect results stream in in real time.',
+      'See if you can find audio that produces false-positives; maybe the sound of a flying drone? The Flight of the Bumblebee?',
+      'Try loading audio from a non-bee insect; does buzzdetect work for stink bugs? Mosquitoes?',
+      'Enable different neurons to see how they react to different sounds. Note: we optimize for the ins_buzz neuron, so other neurons might not reliably detect their corresponding classes.',
     ],
   },
 ];
 
-/** Enabled classes from before the tour started, restored when it ends. */
-let preTourEnabled: string[] | null = null;
-
 const tour = new Tour(TOUR_STEPS, {
   // Only ins_buzz during the walkthrough, so the demo clip isn't cluttered
-  // with classes the tour never mentions.
+  // with classes the tour never mentions. Left this way once the tour ends,
+  // rather than restored -- the tour just explained ins_buzz specifically,
+  // and the demo clip it loaded stays around too.
   onStart: () => {
-    preTourEnabled = SERIES.filter((s) => s.enabled).map((s) => s.name);
     for (const s of SERIES) s.enabled = s.name === 'ins_buzz';
     buildClassList();
     seriesChanged();
-  },
-  onStop: () => {
-    if (preTourEnabled) {
-      const restore = preTourEnabled;
-      for (const s of SERIES) s.enabled = restore.includes(s.name);
-      buildClassList();
-      seriesChanged();
-    }
-    preTourEnabled = null;
   },
 });
 
