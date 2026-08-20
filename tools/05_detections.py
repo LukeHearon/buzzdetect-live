@@ -9,8 +9,8 @@ import numpy as np, onnxruntime as ort
 DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'artifacts')
 
 ap = argparse.ArgumentParser()
-ap.add_argument('--ref', default='soybean')
-ap.add_argument('--threshold', type=float, default=-1.2)
+ap.add_argument('--ref', default='testbuzz')
+ap.add_argument('--threshold', type=float, default=-0.75)
 a = ap.parse_args()
 
 ref = np.load(os.path.join(DIR, f'{a.ref}.npz'))

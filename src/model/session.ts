@@ -1,9 +1,14 @@
 /**
  * Loading and running buzzdetect_v3.onnx.
  *
- * The graph is YAMNet's convolution stack with model_general_v3's dense head
- * fused onto it, taking log-mel patches and returning one activation per class.
- * See tools/03_build_onnx.py for how it is built and what was traded away.
+ * The graph is YAMNet's convolution stack with the yamnet_large_general dense
+ * head fused onto it, taking log-mel patches and returning one activation per
+ * class. See tools/03_build_onnx.py for how it is built and what was traded
+ * away.
+ *
+ * yamnet_large_general is experimental: it hasn't been validated as
+ * thoroughly as buzzdetect's earlier models. See DEFAULT_THRESHOLD's note in
+ * ui/series.ts and the caveat surfaced in the help dialog.
  */
 
 import * as ort from 'onnxruntime-web/wasm';
@@ -29,23 +34,28 @@ export const MODEL_URL = new URL('model/buzzdetect_v3.onnx', BASE);
 
 /**
  * Class order of the model's output. Fixed by config_model.json in
- * models/model_general_v3 -- the head's columns are in this order and nothing
- * in the file records it, so it has to be mirrored here.
+ * models/yamnet_large_general -- the head's columns are in this order and
+ * nothing in the file records it, so it has to be mirrored here. Only a
+ * subset is surfaced in the UI; see DISPLAY_ORDER in ui/series.ts.
  */
 export const CLASSES = [
-  'mech_train',
-  'ins_trill',
-  'frog',
-  'ambient_noise',
-  'mech_plane',
-  'ambient_rain',
-  'mech_hum',
-  'mech_auto',
-  'ins_buzz',
-  'mech_siren',
   'ambient_background',
-  'bird_goose',
+  'ambient_music',
+  'ambient_noise',
+  'ambient_rain',
+  'ambient_ringing',
+  'animal',
   'human',
+  'ins_buzz',
+  'ins_trill',
+  'mech_ac',
+  'mech_auto',
+  'mech_beep',
+  'mech_hum',
+  'mech_hum_chainsaw',
+  'mech_plane',
+  'mech_tool',
+  'static',
 ] as const;
 
 export const BUZZ_INDEX = CLASSES.indexOf('ins_buzz');

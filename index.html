@@ -117,8 +117,12 @@
     <dialog id="help-dialog" class="help">
       <h2>buzzdetect live!</h2>
       <p>
-        Runs a compressed version of buzzdetect's <code>model_general_v3</code> on audio.
+        Runs a compressed version of buzzdetect's <code>yamnet_large_general</code> model on audio.
         All processing happens locally on your browser; audio isn't uploaded.
+      </p>
+      <p>
+        <strong>Note:</strong> <code>yamnet_large_general</code> is an experimental model that hasn't
+        been fully tested yet. Treat its results, including the ins_buzz threshold below, as provisional.
       </p>
 
       <h3>Getting audio in</h3>
@@ -151,7 +155,7 @@
           The <strong>Neurons</strong> button lets you pick what neurons you want to plot.
           Note! We only tune buzzdetect for performance on the ins_buzz neuron, but you may find the others informative.
           You can set a detection threshold for each - a level above which you want to consider the frame positive for the event in question.
-          Our baseline threshold for the ins_buzz neuron is -1.2
+          Our baseline threshold for the ins_buzz neuron is -0.75
         </li>
       </ul>
 
@@ -164,6 +168,7 @@
       <h2>Neurons</h2>
       <p class="muted small">
         Pick which neurons you want to plot and set a detection threshold foeach.
+        These come from an experimental model that hasn't been fully tested yet.
       </p>
       <div id="class-list" class="class-list"></div>
       <form method="dialog"><button class="button" type="submit">Done</button></form>

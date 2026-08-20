@@ -5,7 +5,7 @@ A playground for quickly running buzzdetect from your browser!
 
 This is only a playground, I strongly recommend that you use [the real buzzdetect](https://github.com/OSU-Bee-Lab/buzzdetect) for real analyses. At the very least because I don't have a button to export results from the playground...
 
-Currently, this runs a lightly quantized version of [`model_general_v3`](https://github.com/OSU-Bee-Lab/buzzdetect/tree/main/models/model_general_v3). Results should be pretty much numerically identical to the real deal.
+Currently, this runs a lightly quantized version of `yamnet_large_general`. Results should be pretty much numerically identical to the real deal. This model is experimental and hasn't been fully tested yet -- only a curated subset of its classes is offered, and its default threshold is a starting point rather than a settled number.
 
 ## What it do
 
@@ -28,9 +28,9 @@ This part was written by Claude. Here it is for good ol' posterity.
 
 |  |  |
 |------------------------------------|------------------------------------|
-| `01_reference.py` | ground truth: runs real audio through buzzdetect's own path and saves waveform, log-mel, embeddings and activations. Asserts `yamnet.keras` matches the `yamnet_k2` SavedModel buzzdetect runs (5.7e-6) — the export is invalid otherwise. |
-| `02_extract_weights.py` | pulls raw layer weights to `.npz` + a JSON spec. No arithmetic. |
-| `03_build_onnx.py` | builds the single graph: YAMNet's conv stack with `model_general_v3`'s dense head fused on. Folds BatchNorm, resolves TF `SAME` padding to explicit pads, applies the storage precision. |
+| `01_reference.py` | ground truth: runs real audio through buzzdetect's own path (`--model`, default `yamnet_large_general`) and saves waveform, log-mel, embeddings and activations. For a `yamnet_k2`-embedder model this also asserts `yamnet.keras` matches the `yamnet_k2` SavedModel (5.7e-6) — the export is invalid otherwise; `yamnet_large_general` uses `yamnet.keras` directly, so there's nothing to cross-check. |
+| `02_extract_weights.py` | pulls raw layer weights to `.npz` + a JSON spec (`--model`, same default). No arithmetic. |
+| `03_build_onnx.py` | builds the single graph: YAMNet's conv stack with the head's dense layer fused on. Folds BatchNorm, resolves TF `SAME` padding to explicit pads, applies the storage precision. |
 | `04_verify_onnx.py` | ONNX vs SavedModel on identical patches. |
 | `05_detections.py` | detection-count agreement at a threshold — flips, not just totals. |
 | `06_fixtures.py` | binary fixtures for the TypeScript tests. |

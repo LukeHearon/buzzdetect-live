@@ -35,10 +35,10 @@ async function main(): Promise<void> {
   const base = document.baseURI;
 
   const reference: Reference = await (
-    await fetch(new URL('sample/soybean_10s.reference.json', base))
+    await fetch(new URL('sample/testbuzz.reference.json', base))
   ).json();
 
-  const blob = await (await fetch(new URL('sample/soybean_10s.wav', base))).blob();
+  const blob = await (await fetch(new URL('sample/testbuzz.wav', base))).blob();
   const decoded = await decodeForAnalysis(new File([blob], 'sample.wav', { type: 'audio/wav' }));
 
   const extractor = new MelPatchExtractor(reference.framehopProp);

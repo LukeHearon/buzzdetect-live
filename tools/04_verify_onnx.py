@@ -37,7 +37,7 @@ def report(name, got, want, tol):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--ref', default='soybean')
+    ap.add_argument('--ref', default='testbuzz')
     ap.add_argument('--model', default='buzzdetect_v3.onnx')
     args = ap.parse_args()
 

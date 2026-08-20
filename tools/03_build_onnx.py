@@ -1,7 +1,7 @@
 """
 Builds one ONNX graph: log-mel patches -> 13 buzzdetect activations.
 
-YAMNet's conv stack and model_general_v3's dense head are fused into a single
+YAMNet's conv stack and yamnet_large_general's dense head are fused into a single
 file so the browser loads one model and pays one inference call per batch.
 
 Two size/speed reductions happen here, both exact or near-exact:
@@ -193,7 +193,7 @@ def main():
     graph = helper.make_graph(b.nodes, 'buzzdetect_general_v3', [inp], [out, emb], b.inits)
     model = helper.make_model(graph, opset_imports=[helper.make_opsetid('', OPSET)],
                               producer_name='buzzdetect-web')
-    model.doc_string = ('YAMNet conv stack (BatchNorm folded) + model_general_v3 dense head. '
+    model.doc_string = ('YAMNet conv stack (BatchNorm folded) + yamnet_large_general dense head. '
                         'Input: log-mel patches [N,96,64]. Output: 13 class activations.')
     onnx.checker.check_model(model)
 

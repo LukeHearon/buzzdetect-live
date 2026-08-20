@@ -1,9 +1,9 @@
 {
- "source": "/Users/luke/Documents/lukehearon.com/datasets/five_flowers_audio/soybean/53/230809_1300.mp3",
+ "source": "/Users/luke/Documents/bioacoustics/buzzdetect/audio_in/testbuzz.mp3",
  "framehopProp": 1.0,
  "sampleRate": 16000,
- "numSamples": 160000,
- "numPatches": 11,
+ "numSamples": 103785,
+ "numPatches": 7,
  "patchShape": [
   96,
   64
@@ -13,18 +13,22 @@
   64
  ],
  "classes": [
-  "mech_train",
-  "ins_trill",
-  "frog",
-  "ambient_noise",
-  "mech_plane",
-  "ambient_rain",
-  "mech_hum",
-  "mech_auto",
-  "ins_buzz",
-  "mech_siren",
   "ambient_background",
-  "bird_goose",
-  "human"
+  "ambient_music",
+  "ambient_noise",
+  "ambient_rain",
+  "ambient_ringing",
+  "animal",
+  "human",
+  "ins_buzz",
+  "ins_trill",
+  "mech_ac",
+  "mech_auto",
+  "mech_beep",
+  "mech_hum",
+  "mech_hum_chainsaw",
+  "mech_plane",
+  "mech_tool",
+  "static"
  ]
 }

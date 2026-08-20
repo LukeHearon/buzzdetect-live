@@ -25,14 +25,14 @@ def main():
     ref = np.load(os.path.join(DIR_ART, f'{tag}.npz'))
     os.makedirs(DIR_OUT, exist_ok=True)
 
-    wav_path = os.path.join(DIR_OUT, 'soybean_10s.wav')
+    wav_path = os.path.join(DIR_OUT, 'testbuzz.wav')
     sf.write(wav_path, ref['waveform'], 16000, subtype='FLOAT')
 
-    ref_path = os.path.join(DIR_OUT, 'soybean_10s.reference.json')
+    ref_path = os.path.join(DIR_OUT, 'testbuzz.reference.json')
     with open(ref_path, 'w') as f:
         json.dump({
             'source': os.path.basename(str(ref['source'])),
-            'note': 'activations from buzzdetect model_general_v3 via TensorFlow',
+            'note': 'activations from buzzdetect yamnet_large_general via TensorFlow',
             'framehopProp': float(ref['framehop_prop']),
             'classes': [str(c) for c in ref['classes']],
             'activations': [[round(float(v), 6) for v in row] for row in ref['logits']],

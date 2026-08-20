@@ -756,7 +756,7 @@ const TOUR_STEPS: TourStep[] = [
   {
     target: 'acts',
     title: 'buzzdetect results',
-    body: "Here are the buzzdetect results. Each point represents a single 'frame' of audio, 0.96 seconds long. buzzdetect outputs one score per frame. The ins_buzz neuron is what detects bee buzzing. We call detections whenever the value is above -1.2; detected frames have a solid dot and brighter backround. You can click on a frame to select just the audio in that frame.",
+    body: "Here are the buzzdetect results. Each point represents a single 'frame' of audio, 0.96 seconds long. buzzdetect outputs one score per frame. The ins_buzz neuron is what detects bee buzzing. We call detections whenever the value is above -0.75; detected frames have a solid dot and brighter backround. You can click on a frame to select just the audio in that frame.",
     placement: 'top',
   },
   {
