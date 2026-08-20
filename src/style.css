@@ -27,10 +27,13 @@
 html,
 body {
   margin: 0;
-  min-height: 100%;
 }
 
 body {
+  /* vh, not a %: a % here needs html to have a definite height, which an
+     auto-height ancestor never gives it. min- so a crowded header can still
+     push the page past one screen and scroll, rather than clipping. */
+  min-height: 100vh;
   background: var(--bg);
   color: var(--text);
   font: 13px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -185,14 +188,40 @@ main {
   overflow: hidden;
 }
 .panel.plot {
-  flex: 1;
+  flex: 3 1 0;
   border-radius: 6px 6px 0 0;
   /* The spectrogram must never be squeezed away by a crowded window. */
   min-height: 160px;
 }
 .panel:not(.plot) {
+  flex: 2 1 0;
+  min-height: 100px;
   border-radius: 0 0 6px 6px;
   border-top: 0;
+}
+
+/* Grabbed to change the plot/results split. flex-grow on the two panels above
+   is set directly (in px-equivalent weights) while dragging, so the ratio
+   they establish also holds as the window itself is resized. */
+.resizer {
+  flex: none;
+  height: 9px;
+  margin: -1px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: row-resize;
+  touch-action: none;
+}
+.resizer-grip {
+  width: 36px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line);
+}
+.resizer:hover .resizer-grip,
+.resizer.dragging .resizer-grip {
+  background: var(--accent);
 }
 
 /* Wraps rather than overflows: on a phone the Hz and contrast controls are
@@ -262,8 +291,7 @@ input[type='range'] {
   width: 100%;
 }
 .acts-row {
-  flex: none;
-  height: 150px;
+  flex: 1;
 }
 
 /* Docked on the axis rather than in the panel head, so the number typed is

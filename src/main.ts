@@ -63,6 +63,9 @@ const els = {
   micGainControl: $('mic-gain-control'),
   micGain: $<HTMLInputElement>('mic-gain'),
   micGainOut: $<HTMLOutputElement>('mic-gain-out'),
+  plotPanel: $('plot-panel'),
+  resultsPanel: $('results-panel'),
+  resizer: $('resizer'),
 };
 
 const spec = new SpectrogramView(els.spec, els.specAxis, els.colorscale);
@@ -862,6 +865,45 @@ function resize(): void {
 }
 
 new ResizeObserver(resize).observe(document.body);
+
+// ------------------------------------------------------ panel resizer ---
+
+/**
+ * Drags the spectrogram/results split. flex-grow on the two panels is set
+ * directly to their pixel heights at drag end, so the ratio it establishes
+ * also holds when the window itself is resized -- no listener needed for
+ * that case, flexbox does it.
+ */
+(function setupResizer(): void {
+  const MIN = 100;
+  let startY = 0;
+  let startTop = 0;
+  let startBottom = 0;
+
+  els.resizer.addEventListener('pointerdown', (e: PointerEvent) => {
+    e.preventDefault();
+    startY = e.clientY;
+    startTop = els.plotPanel.getBoundingClientRect().height;
+    startBottom = els.resultsPanel.getBoundingClientRect().height;
+    els.resizer.setPointerCapture(e.pointerId);
+    els.resizer.classList.add('dragging');
+  });
+
+  els.resizer.addEventListener('pointermove', (e: PointerEvent) => {
+    if (!els.resizer.hasPointerCapture(e.pointerId)) return;
+    const dy = e.clientY - startY;
+    const top = Math.max(MIN, Math.min(startTop + startBottom - MIN, startTop + dy));
+    const bottom = startTop + startBottom - top;
+    els.plotPanel.style.flexGrow = String(top);
+    els.resultsPanel.style.flexGrow = String(bottom);
+    resize();
+  });
+
+  els.resizer.addEventListener('pointerup', (e: PointerEvent) => {
+    els.resizer.releasePointerCapture(e.pointerId);
+    els.resizer.classList.remove('dragging');
+  });
+})();
 
 /** Time-axis ticks, as DOM so the labels stay crisp. */
 function drawTimeAxis(): void {

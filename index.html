@@ -176,7 +176,7 @@
 
     <main>
       <!-- Spectrogram: frequency gutter, then the plot. -->
-      <section class="panel plot">
+      <section id="plot-panel" class="panel plot">
         <div class="panel-head">
           <span id="filename" class="muted">Open an audio file or record audio to begin</span>
           <span class="grow"></span>
@@ -218,6 +218,11 @@
         </div>
       </section>
 
+      <!-- Drag to resize the spectrogram and results panels against each other. -->
+      <div id="resizer" class="resizer" title="Drag to resize panels">
+        <span class="resizer-grip"></span>
+      </div>
+
       <!-- Shared time axis, indented past the gutter so both panels align. -->
       <div class="timeaxis-row">
         <span class="gutter-spacer"></span>
@@ -226,7 +231,7 @@
       </div>
 
       <!-- buzzdetect results, on the same time axis. -->
-      <section class="panel">
+      <section id="results-panel" class="panel">
         <div class="panel-head">
           <button id="settings" class="button icon-button" type="button" title="Pick which neurons you want to plot">
             <svg class="icon" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>
