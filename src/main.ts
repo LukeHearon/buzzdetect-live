@@ -23,6 +23,7 @@ import { SERIES, enabledSeries, type Series } from './ui/series';
 import { formatTimeShort, normalizeSelection, type Selection } from './ui/viewport';
 import { LiveSession, LIVE_STORE_PATCHES } from './live/liveSession';
 import { createDualRange } from './ui/rangeSlider';
+import { Tour, type TourStep } from './ui/tour';
 import type { WorkerResponse } from './workers/analysis.worker';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -33,6 +34,7 @@ const els = {
   openFile: $('open-file'),
   help: $<HTMLButtonElement>('help'),
   helpDialog: $<HTMLDialogElement>('help-dialog'),
+  tour: $<HTMLButtonElement>('tour'),
   micLabel: $('mic-label'),
   liveBadge: $('live-badge'),
   meterFill: $('meter-fill'),
@@ -245,6 +247,13 @@ async function loadFile(file: File): Promise<void> {
   } catch (err) {
     setStatus(err instanceof Error ? err.message : String(err), 'error');
   }
+}
+
+/** Loads the bundled clip so the tour has something on screen to point at. */
+async function loadSample(): Promise<void> {
+  const res = await fetch(new URL('sample/testbuzz.mp3', document.baseURI));
+  const blob = await res.blob();
+  await loadFile(new File([blob], 'testbuzz.mp3', { type: 'audio/mpeg' }));
 }
 
 // --------------------------------------------------------- interactions ---
@@ -493,7 +502,7 @@ document.addEventListener('keydown', (e) => {
   if (target?.tagName === 'INPUT' && (target as HTMLInputElement).type !== 'range') return;
   // The dialog owns the keyboard while it is up: Escape should close it, not
   // also clear the selection behind it.
-  if (els.helpDialog.open || els.settingsDialog.open) return;
+  if (els.helpDialog.open || els.settingsDialog.open || tour.isActive) return;
 
   switch (e.key) {
     case ' ':
@@ -705,6 +714,114 @@ els.time.addEventListener('blur', () => {
 });
 
 els.help.addEventListener('click', () => els.helpDialog.showModal());
+
+// -------------------------------------------------------------- tour ---
+
+/** Coarse-pointer devices (touch/stylus primary) get the touch gesture wording. */
+const isTouch = window.matchMedia('(pointer: coarse)').matches;
+
+const TOUR_STEPS: TourStep[] = [
+  {
+    target: 'open-file',
+    title: 'Getting audio in',
+    body: 'There are two ways to load audio data. First, you can open an existing file using the button with the folder icon. Second, you can record audio right off of your microphone with the record button. We just loaded a short demo recording for you to interact with during this walkthrough.',
+    placement: 'bottom',
+  },
+  {
+    target: ['to-start', 'play', 'time'],
+    title: 'Navigating audio',
+    body: 'With these buttons, you can navigate the loaded audio. Play/pause, jump back to the start, or enter a time to jump to. There are hotkeys as well: space bar toggles playback; arrow keys step the playhead.',
+    placement: 'bottom',
+  },
+  {
+    target: 'spec',
+    title: 'Spectrogram',
+    body: isTouch
+      ? 'Here we see a spectrogram, a visualization of the audio. The Y axis is frequency (Hz), the X axis is time, and the color is amplitude (loudness, dB). You can navigate the audio using the spectrogram, too: tap to seek, drag to select a range, swipe to pan, pinch to zoom.'
+      : 'Here we see a spectrogram, a visualization of the audio. The Y axis is frequency (Hz), the X axis is time, and the color is amplitude (loudness, dB). You can navigate the audio using the spectrogram, too: click to seek, drag to select a range, scroll to pan, shift-scroll to zoom.',
+    placement: 'bottom',
+  },
+  {
+    target: ['min-hz', 'max-hz'],
+    title: 'Frequency range',
+    body: "You can also choose which frequencies the spectrogram displays. Type a value into the upper and lower boxes to set the upper and lower limits of the spectrogram. This change is display-only and doesn't change the buzzdetect results. We default to a good range for viewing bee buzzes, but this also may need tuned for other types of sounds.",
+    placement: 'right',
+  },
+  {
+    target: 'contrast',
+    title: 'Contrast',
+    body: 'Recordings vary in their volume level, so you may need to fine-tune the spectrogram. Drag the two handles to dial in the color scale.',
+    placement: 'left',
+  },
+  {
+    target: 'acts',
+    title: 'buzzdetect results',
+    body: "Here are the buzzdetect results. Each point represents a single 'frame' of audio, 0.96 seconds long. buzzdetect outputs one score per frame. The ins_buzz neuron is what detects bee buzzing. We call detections whenever the value is above -1.2; detected frames have a solid ",
+    placement: 'top',
+  },
+  {
+    target: 'settings',
+    title: 'Neurons',
+    body: 'Pick which classes to plot and set a detection threshold for each. Only ins_buzz is tuned for accuracy; the others are there if you find them useful. Its baseline threshold is -1.2.',
+    placement: 'bottom',
+  },
+  {
+    target: 'legend',
+    title: 'Legend',
+    body: 'Shows which classes are currently plotted and their colours; frames above a class’s threshold count toward the detection total shown beside the Neurons button.',
+    placement: 'left',
+  },
+  {
+    title: "That's the tour",
+    body: 'Open your own recording and see what buzzdetect finds. A few things worth trying:',
+    tips: [
+      'Load a file with obvious insect noise and watch ins_buzz light up.',
+      'Nudge its threshold up or down and see the detection count change.',
+      'Record a few seconds live and browse it once capture stops.',
+      'Zoom into a single frame to compare the spectrogram against the model score.',
+    ],
+  },
+];
+
+/** Enabled classes from before the tour started, restored when it ends. */
+let preTourEnabled: string[] | null = null;
+
+const tour = new Tour(TOUR_STEPS, {
+  // Only ins_buzz during the walkthrough, so the demo clip isn't cluttered
+  // with classes the tour never mentions.
+  onStart: () => {
+    preTourEnabled = SERIES.filter((s) => s.enabled).map((s) => s.name);
+    for (const s of SERIES) s.enabled = s.name === 'ins_buzz';
+    buildClassList();
+    seriesChanged();
+  },
+  onStop: () => {
+    if (preTourEnabled) {
+      const restore = preTourEnabled;
+      for (const s of SERIES) s.enabled = restore.includes(s.name);
+      buildClassList();
+      seriesChanged();
+    }
+    preTourEnabled = null;
+  },
+});
+
+els.tour.addEventListener('click', () => {
+  void (async () => {
+    if (!hasData()) {
+      els.tour.disabled = true;
+      try {
+        await loadSample();
+      } catch (err) {
+        setStatus(err instanceof Error ? err.message : String(err), 'error');
+        return;
+      } finally {
+        els.tour.disabled = false;
+      }
+    }
+    tour.start();
+  })();
+});
 
 els.play.addEventListener('click', () => void player.toggle());
 els.toStart.addEventListener('click', () => {

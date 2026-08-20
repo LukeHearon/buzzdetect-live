@@ -40,6 +40,12 @@ const DOT_RADIUS = 3.5;
 const MAX_DOT_SERIES = 4;
 /** Panel background; hollow dots are filled with it so the line does not show through. */
 export const PANEL_BG = '#0b1220';
+/**
+ * Detected-frame background wash -- the same brighter dark blue as the app's
+ * button chrome, so it reads as "lit up" against PANEL_BG without competing
+ * with any series' own colour.
+ */
+const DETECTED_BG = '#16213a';
 
 /**
  * Activations as they arrive, indexed [patch * CLASSES.length + class].
@@ -185,6 +191,32 @@ export class ActivationView {
     const last = Math.min(store.filled - 1, store.patchAt(viewport.end) + 1);
     if (last < first) return;
 
+    // Whether any shown series clears its own threshold in each visible frame,
+    // shared below by the background wash and by hollow dots (so a hollow dot
+    // sitting inside a detected frame -- another series' detection -- reads
+    // against that frame's actual background instead of the panel's).
+    const detectedFrame = new Uint8Array(last - first + 1);
+    for (let p = first; p <= last; p++) {
+      for (const s of series) {
+        if (store.get(p, s.index) > s.threshold) {
+          detectedFrame[p - first] = 1;
+          break;
+        }
+      }
+    }
+
+    // Detected-frame background: the span between a frame's boundaries gets a
+    // brighter fill wherever it was detected, so a detection reads as a wash
+    // you can see at a glance and not just the dot sitting on top of it.
+    ctx.fillStyle = DETECTED_BG;
+    for (let p = first; p <= last; p++) {
+      if (!detectedFrame[p - first]) continue;
+      const x0 = viewport.timeToX(store.timeOf(p));
+      const x1 = viewport.timeToX(store.timeOf(p) + hop);
+      if (x1 < 0 || x0 > this.width) continue;
+      ctx.fillRect(x0, 0, x1 - x0, this.height);
+    }
+
     if (selection) {
       ctx.fillStyle = 'rgba(226, 232, 240, 0.045)';
       const x0 = viewport.timeToX(selection.from);
@@ -263,7 +295,9 @@ export class ActivationView {
       ctx.stroke();
 
       // One dot per frame: filled above this series' threshold, hollow below.
-      // This is the detection marking -- there is no separate band to switch on.
+      // A hollow dot's fill matches the frame's own background -- plain panel
+      // background, or the detected wash if another series fired there --
+      // so the line doesn't show through either way.
       if (!dots) continue;
       for (let p = first; p <= last; p++) {
         const cx = viewport.timeToX(store.timeOf(p) + hop / 2);
@@ -276,7 +310,7 @@ export class ActivationView {
           ctx.fillStyle = s.color;
           ctx.fill();
         } else {
-          ctx.fillStyle = PANEL_BG;
+          ctx.fillStyle = detectedFrame[p - first] ? DETECTED_BG : PANEL_BG;
           ctx.fill();
           ctx.strokeStyle = s.color;
           ctx.lineWidth = 1;

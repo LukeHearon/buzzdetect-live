@@ -40,6 +40,10 @@
           <path d="M4 9v6h4l5 4V5L8 9z" />
           <path d="M17 8a5 5 0 0 1 0 8" />
         </g>
+        <g id="i-compass">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M15.5 8.5l-2 5-5 2 2-5z" />
+        </g>
       </defs>
     </svg>
 
@@ -98,6 +102,10 @@
 
       <span class="grow"></span>
       <span id="status" class="status">Loading model…</span>
+      <button id="tour" class="button icon-button" type="button" title="Take a guided tour">
+        <svg class="icon" viewBox="0 0 24 24"><use href="#i-compass" /></svg>
+        <span class="sr-only">Take a guided tour</span>
+      </button>
       <button id="help" class="button icon-button" type="button" title="Help">
         <span aria-hidden="true">?</span>
         <span class="sr-only">Help</span>

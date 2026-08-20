@@ -511,6 +511,80 @@ input[type='range'] {
   text-align: right;
 }
 
+/* Guided tour: a full-page dim layer, a spotlight ring positioned over the
+   current target (its own box-shadow does the dimming-minus-a-hole, so the
+   backdrop underneath just needs to sit below both and above everything else),
+   and a bubble of copy beside it. All three are `position: fixed` and
+   recomputed on resize/scroll -- see ui/tour.ts. */
+.tour-backdrop {
+  /* Pointer-blocking only: the dim-with-a-hole look comes entirely from the
+     ring's spread box-shadow below, which also keeps the cutout's rounded
+     corners matching the ring exactly. */
+  position: fixed;
+  inset: 0;
+  background: transparent;
+  z-index: 200;
+  transition: background 0.15s ease;
+}
+/* The sign-off step has no target, so the ring has nothing to draw and the
+   backdrop dims the page on its own instead. */
+.tour-backdrop.tour-dim {
+  background: rgba(4, 8, 16, 0.72);
+}
+.tour-ring {
+  position: fixed;
+  border-radius: 8px;
+  box-shadow: 0 0 0 3px var(--accent), 0 0 0 9999px rgba(4, 8, 16, 0.72);
+  pointer-events: none;
+  z-index: 201;
+  transition: left 0.15s ease, top 0.15s ease, width 0.15s ease, height 0.15s ease, opacity 0.15s ease;
+}
+.tour-ring.tour-ring-hidden {
+  opacity: 0;
+}
+.tour-bubble {
+  position: fixed;
+  z-index: 202;
+  width: 280px;
+  max-width: calc(100vw - 16px);
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  transition: left 0.15s ease, top 0.15s ease;
+}
+.tour-bubble h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+.tour-bubble p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.tour-tips {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.tour-tips li {
+  margin: 3px 0;
+}
+.tour-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+}
+.tour-count {
+  color: var(--muted);
+  margin-right: auto;
+}
+
 /* Separates the source controls from the transport controls. */
 .divider {
   width: 1px;
