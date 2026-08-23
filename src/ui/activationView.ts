@@ -168,6 +168,11 @@ export class ActivationView {
     return PAD_TOP + (1 - (v - this.min) / (this.max - this.min)) * usable;
   }
 
+  /** Public: pixel y for a value, for callers picking the trace nearest a hover point. */
+  yFor(v: number): number {
+    return this.yOf(v);
+  }
+
   draw(
     store: ActivationStore,
     series: readonly Series[],

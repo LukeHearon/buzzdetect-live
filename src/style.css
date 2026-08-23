@@ -719,7 +719,9 @@ label.button:focus-visible {
 /* Legend, over the top-right of the results plot. The names carry their series
    colour, so the plot needs no other key. Columns wrap leftwards once the list
    is taller than the panel; `align-content: flex-end` is what keeps the block
-   pinned to the right edge as it grows. */
+   pinned to the right edge as it grows. A semi-opaque backdrop separates it
+   from the plot now that hovering a frame adds a column of numbers, which
+   need a steadier ground than the text-shadow trick alone gives them. */
 .legend {
   position: absolute;
   top: 5px;
@@ -729,6 +731,9 @@ label.button:focus-visible {
   flex-flow: column wrap;
   align-content: flex-end;
   gap: 1px 14px;
+  background: rgba(11, 18, 32, 0.72);
+  border-radius: 6px;
+  padding: 5px 9px;
   /* A key, not a control: clicks belong to the plot underneath. */
   pointer-events: none;
   z-index: 1;
@@ -738,10 +743,26 @@ label.button:focus-visible {
   align-items: center;
   gap: 5px;
   font: 11px/1.5 ui-monospace, monospace;
-  /* The plot runs under this, so the text needs its own ground. */
-  text-shadow:
-    0 0 3px #0b1220,
-    0 0 3px #0b1220;
+  /* Dimmed when a different series' trace is the one under the cursor, so
+     the picked-out one reads against the rest without moving anything. */
+  transition: opacity 0.1s ease;
+}
+.legend-item.dimmed {
+  opacity: 0.35;
+}
+
+.legend-name {
+  min-width: 0;
+}
+
+/* The value shown while hovering a frame -- right-aligned so a run of
+   negative signs and decimals lines up rather than jittering the row width. */
+.legend-value {
+  margin-left: 6px;
+  min-width: 4ch;
+  text-align: right;
+  color: rgba(226, 232, 240, 0.85);
+  font-variant-numeric: tabular-nums;
 }
 
 .pip {

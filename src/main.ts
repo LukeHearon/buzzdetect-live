@@ -85,6 +85,10 @@ let hasAudio = false;
 let live: LiveSession | null = null;
 let selection: Selection | null = null;
 let hoverX: number | null = null;
+/** Mouse y within whichever panel it is over, for picking the trace nearest the cursor. */
+let hoverY: number | null = null;
+/** Whether the hover above is over the results panel -- values are only shown there. */
+let hoverOnActs = false;
 let overlayDirty = true;
 let actsDirty = true;
 
@@ -364,6 +368,8 @@ for (const area of [els.spec, els.acts]) {
 
     // A finger leaves no cursor, so it should leave no hover line either.
     hoverX = e.pointerType === 'touch' ? null : x;
+    hoverY = e.pointerType === 'touch' ? null : offsetY(e, area);
+    hoverOnActs = onActs;
     overlayDirty = true;
 
     if (pinch) {
@@ -409,6 +415,7 @@ for (const area of [els.spec, els.acts]) {
     if (pointers.size < 2) pinch = null;
     if (e.pointerType === 'touch') {
       hoverX = null;
+      hoverY = null;
       overlayDirty = true;
     }
   }
@@ -460,6 +467,7 @@ for (const area of [els.spec, els.acts]) {
 
   area.addEventListener('pointerleave', () => {
     hoverX = null;
+    hoverY = null;
     overlayDirty = true;
   });
 
@@ -533,6 +541,10 @@ function offsetX(e: PointerEvent | WheelEvent, area: HTMLElement): number {
   return e.clientX - area.getBoundingClientRect().left;
 }
 
+function offsetY(e: PointerEvent, area: HTMLElement): number {
+  return e.clientY - area.getBoundingClientRect().top;
+}
+
 // -------------------------------------------------------------- controls ---
 
 // ------------------------------------------------------- class selection ---
@@ -594,17 +606,60 @@ function buildClassList(): void {
   els.classList.replaceChildren(frag);
 }
 
-/** Legend: the plotted classes, over the plot's top-right corner. */
+/** Within this many pixels of a series' dot, the cursor is "on" that trace. */
+const HOVER_PICK_PX = 10;
+
+/** The frame under the cursor, only while hovering the results panel. */
+function hoveredFrame(): number | null {
+  if (hoverX === null || !hoverOnActs || store.filled === 0) return null;
+  const p = store.patchAt(spec.viewport.xToTime(hoverX));
+  return p >= 0 && p < store.filled ? p : null;
+}
+
+/** Whichever shown series' value sits closest to the cursor in that frame, if close enough. */
+function hoveredSeries(frame: number): Series | null {
+  if (hoverY === null) return null;
+  let best: Series | null = null;
+  let bestDist = Infinity;
+  for (const s of shown) {
+    const d = Math.abs(acts.yFor(store.get(frame, s.index)) - hoverY);
+    if (d < bestDist) {
+      bestDist = d;
+      best = s;
+    }
+  }
+  return bestDist <= HOVER_PICK_PX ? best : null;
+}
+
+/**
+ * Legend: the plotted classes, over the plot's top-right corner. While
+ * hovering a frame in the results panel, each name grows a value column
+ * showing that class's activation there; hovering close enough to one
+ * series' own dot dims the others so it reads as picked out.
+ */
 function drawLegend(): void {
+  const frame = hoveredFrame();
+  const picked = frame !== null ? hoveredSeries(frame) : null;
+
   const frag = document.createDocumentFragment();
   for (const s of shown) {
     const item = document.createElement('span');
     item.className = 'legend-item';
+    if (picked && picked !== s) item.classList.add('dimmed');
     item.style.color = s.color;
     const pip = document.createElement('span');
     pip.className = 'pip';
     pip.style.background = s.color;
-    item.append(pip, s.name);
+    const name = document.createElement('span');
+    name.className = 'legend-name';
+    name.textContent = s.name;
+    item.append(pip, name);
+    if (frame !== null) {
+      const value = document.createElement('span');
+      value.className = 'legend-value';
+      value.textContent = store.get(frame, s.index).toFixed(2);
+      item.append(value);
+    }
     frag.append(item);
   }
   els.legend.replaceChildren(frag);
@@ -1002,6 +1057,10 @@ function frame(): void {
   if (overlayDirty) {
     overlayDirty = false;
     spec.drawOverlay(head, selection, hoverX);
+    // Hover state (frame, picked trace) only ever changes alongside the
+    // overlay, so riding this flag keeps the legend's value column in step
+    // without a dirty flag of its own.
+    drawLegend();
   }
 
   requestAnimationFrame(frame);
