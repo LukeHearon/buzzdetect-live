@@ -32,8 +32,13 @@ body {
 body {
   /* vh, not a %: a % here needs html to have a definite height, which an
      auto-height ancestor never gives it. min- so a crowded header can still
-     push the page past one screen and scroll, rather than clipping. */
+     push the page past one screen and scroll, rather than clipping.
+     dvh over vh: mobile browsers size vh from the address-bar-collapsed
+     viewport, so content filling exactly 100vh spills past the bottom of the
+     screen actually visible while the bar is showing. dvh tracks that real
+     visible height; vh is the fallback for browsers that don't support it. */
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--bg);
   color: var(--text);
   font: 13px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -475,17 +480,34 @@ input[type='range'] {
   outline-offset: 2px;
 }
 
-/* With nothing loaded, the two source buttons are the only things worth
-   pressing, so they breathe until one of them is used. Slow and low-contrast on
+/* With nothing loaded, the source buttons and the walkthrough are the only
+   things worth pressing, so they breathe until one is used. Low-contrast on
    purpose: this is a hint, not an alarm. */
 @keyframes source-pulse {
   50% {
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.16);
+    box-shadow: 0 0 0 5px rgba(56, 189, 248, 0.16);
   }
 }
 .needs-source {
-  animation: source-pulse 2.4s ease-in-out infinite;
+  animation: source-pulse 2s ease-in-out infinite;
+}
+
+/* Same rhythm as .needs-source, on the prompt text instead of a button
+   outline -- so the walkthrough hint reads as one pulsing message. */
+@keyframes source-pulse-text {
+  50% {
+    color: var(--accent);
+  }
+}
+.needs-source-text {
+  animation: source-pulse-text 2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .needs-source-text {
+    animation: none;
+    color: var(--accent);
+  }
 }
 /* Respect a stated preference for stillness: keep the highlight, drop the
    motion, so the hint survives without the animation. */

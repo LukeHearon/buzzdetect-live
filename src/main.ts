@@ -193,6 +193,8 @@ function updateSourcePrompt(): void {
   const empty = !hasAudio && !live;
   els.mic.classList.toggle('needs-source', empty);
   els.openFile.classList.toggle('needs-source', empty);
+  els.tour.classList.toggle('needs-source', empty);
+  els.filename.classList.toggle('needs-source-text', empty);
 }
 
 /** Clears whatever is loaded, in either mode. */
