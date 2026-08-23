@@ -826,12 +826,6 @@ const TOUR_STEPS: TourStep[] = [
     placement: 'bottom',
   },
   {
-    target: 'legend',
-    title: 'Legend',
-    body: "Here we can see which neurons we're plotting and their corresponding colors. Above the elgend, you can see the total number of frames and detections in your loaded audio.",
-    placement: 'left',
-  },
-  {
     title: "Have fun!",
     body: "That's the gist! Now try playing around with this demo recording, or make your own recording to see what buzzdetect finds. A few things worth trying:",
     tips: [
