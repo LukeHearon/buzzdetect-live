@@ -24,6 +24,7 @@ import { formatTimeShort, normalizeSelection, type Selection } from './ui/viewpo
 import { LiveSession, LIVE_STORE_PATCHES } from './live/liveSession';
 import { createDualRange } from './ui/rangeSlider';
 import { Tour, type TourStep } from './ui/tour';
+import { downloadScreenshot } from './ui/screenshot';
 import type { WorkerResponse } from './workers/analysis.worker';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -54,6 +55,7 @@ const els = {
   settingsDialog: $<HTMLDialogElement>('settings-dialog'),
   classList: $('class-list'),
   legend: $('legend'),
+  screenshot: $<HTMLButtonElement>('screenshot'),
   toStart: $<HTMLButtonElement>('to-start'),
   play: $<HTMLButtonElement>('play'),
   playIcon: document.getElementById('play-icon') as unknown as SVGUseElement,
@@ -214,6 +216,7 @@ function resetSession(): void {
   acts.max = 2;
   els.play.disabled = true;
   els.toStart.disabled = true;
+  els.screenshot.disabled = true;
   actsDirty = true;
   overlayDirty = true;
   updateSourcePrompt();
@@ -242,6 +245,7 @@ async function loadFile(file: File): Promise<void> {
     spec.viewport.fit();
     els.play.disabled = false;
     els.toStart.disabled = false;
+    els.screenshot.disabled = false;
     spec.invalidate();
     actsDirty = true;
 
@@ -775,6 +779,22 @@ els.time.addEventListener('blur', () => {
 
 els.help.addEventListener('click', () => els.helpDialog.showModal());
 
+els.screenshot.addEventListener('click', () => {
+  downloadScreenshot({
+    spec,
+    acts,
+    specAxis: els.specAxis,
+    specBase: spec.base,
+    specOverlay: spec.overlay,
+    colorscale: els.colorscale,
+    timeaxis: els.timeaxis,
+    actsAxis: els.actsAxis,
+    actsCanvas: acts.canvas,
+    legend: els.legend,
+    filename: els.filename.textContent ?? '',
+  });
+});
+
 // -------------------------------------------------------------- tour ---
 
 /** Coarse-pointer devices (touch/stylus primary) get the touch gesture wording. */
@@ -1144,6 +1164,7 @@ async function stopLive(): Promise<void> {
     updateSourcePrompt();
     els.play.disabled = false;
     els.toStart.disabled = false;
+    els.screenshot.disabled = false;
     spec.viewport.duration = samples.length / sampleRate;
     spec.viewport.clamp();
     // The live buffer is bounded, so say so when the earlier audio is gone.

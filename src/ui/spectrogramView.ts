@@ -55,6 +55,10 @@ export class SpectrogramView {
   readonly colorscale: HTMLCanvasElement;
   readonly viewport = new Viewport();
   settings: SpectrogramSettings = { ...DEFAULT_SETTINGS };
+  /** Multiplies drawAxis()/drawColorscale()'s font size. Screenshot export bumps this
+   *  temporarily -- the live gutter stays fixed-size, but an exported PNG has no
+   *  intrinsic scale to read the default small labels against. */
+  axisFontScale = 1;
 
   private data: SpectrogramData | null = null;
   private baseCtx: CanvasRenderingContext2D;
@@ -379,7 +383,7 @@ export class SpectrogramView {
     ctx.stroke();
 
     ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.font = '10px system-ui, sans-serif';
+    ctx.font = `${10 * this.axisFontScale}px system-ui, sans-serif`;
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
 
@@ -436,7 +440,7 @@ export class SpectrogramView {
     const inset = 5;
     const dbAt = (byte: number) => DB_FLOOR + (byte / 255) * (DB_CEIL - DB_FLOOR);
     ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.font = '9px system-ui, sans-serif';
+    ctx.font = `${9 * this.axisFontScale}px system-ui, sans-serif`;
     ctx.textAlign = 'left';
     const labelX = barW + 4;
     ctx.textBaseline = 'top';

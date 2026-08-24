@@ -138,6 +138,8 @@ export class ActivationView {
   /** Value axis, in the model's activation units. */
   min = -4;
   max = 2;
+  /** Multiplies drawAxis()'s font size; see SpectrogramView's field of the same name. */
+  axisFontScale = 1;
 
   constructor(container: HTMLElement, axis: HTMLCanvasElement) {
     this.canvas = document.createElement('canvas');
@@ -336,7 +338,7 @@ export class ActivationView {
   }
 
   /** Value labels in the left gutter, aligned with the spectrogram's. */
-  private drawAxis(): void {
+  drawAxis(): void {
     const ctx = this.axisCtx;
     const w = this.axis.width / this.dpr;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -351,7 +353,7 @@ export class ActivationView {
     ctx.stroke();
 
     ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.font = '10px system-ui, sans-serif';
+    ctx.font = `${10 * this.axisFontScale}px system-ui, sans-serif`;
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
     const TICKS = 4;

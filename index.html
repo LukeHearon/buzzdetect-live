@@ -44,6 +44,10 @@
           <circle cx="12" cy="12" r="9" />
           <path d="M15.5 8.5l-2 5-5 2 2-5z" />
         </g>
+        <g id="i-camera">
+          <path d="M4 8h3l2-2h6l2 2h3v11H4z" />
+          <circle cx="12" cy="13.5" r="3.5" />
+        </g>
       </defs>
     </svg>
 
@@ -102,6 +106,10 @@
 
       <span class="grow"></span>
       <span id="status" class="status">Loading model…</span>
+      <button id="screenshot" class="button icon-button" type="button" title="Download a screenshot of the spectrogram and results" disabled>
+        <svg class="icon" viewBox="0 0 24 24"><use href="#i-camera" /></svg>
+        <span class="sr-only">Download screenshot</span>
+      </button>
       <button id="tour" class="button icon-button" type="button" title="Take a guided tour">
         <svg class="icon" viewBox="0 0 24 24"><use href="#i-compass" /></svg>
         <span class="sr-only">Take a guided tour</span>
