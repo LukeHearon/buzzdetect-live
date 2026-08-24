@@ -27,8 +27,8 @@ export const DB_FLOOR = -120;
 /** dBFS mapped to byte 255. */
 export const DB_CEIL = 0;
 
-/** FFT size for the display. Fixed: 1024 is the useful compromise and one less knob. */
-export const DISPLAY_FFT_SIZE = 1024;
+/** FFT size for the display. Fixed: 4096 is the useful compromise and one less knob. */
+export const DISPLAY_FFT_SIZE = 4096;
 /**
  * Mel bands stored. Above a canvas-height-ish count the extra bands are never
  * resolved on screen and only cost memory.
