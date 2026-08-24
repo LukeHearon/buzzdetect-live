@@ -41,9 +41,10 @@ export const DEFAULT_SETTINGS: SpectrogramSettings = {
   minHz: 0,
   maxHz: 6000,
   // -120..0 dBFS maps to 0..255; field recordings sit low, so the default
-  // window opens at about -95 dBFS rather than showing mostly black.
-  minByte: 53,
-  maxByte: 200,
+  // window opens at about -69 dBFS rather than showing mostly black. Tuned by
+  // ear against passive field recordings, not derived from a measurement.
+  minByte: 108,
+  maxByte: 185,
   colormap: 'magma',
 };
 
