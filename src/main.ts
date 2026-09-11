@@ -792,6 +792,7 @@ els.screenshot.addEventListener('click', () => {
     actsCanvas: acts.canvas,
     legend: els.legend,
     filename: els.filename.textContent ?? '',
+    durationSeconds: spec.viewport.duration,
   });
 });
 

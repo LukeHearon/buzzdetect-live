@@ -37,6 +37,15 @@ const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 const PAD = 14;
 const FOOTER_H = 24;
 
+// Same ramp as .brand strong in style.css, entered at its purple mid-point.
+const WORDMARK_STOPS: [number, string][] = [
+  [0, '#7a2382'],
+  [0.3, '#b5367a'],
+  [0.58, '#e55064'],
+  [0.8, '#fb8761'],
+  [1, '#fec287'],
+];
+
 interface Rect {
   left: number;
   top: number;
@@ -72,6 +81,7 @@ export interface ScreenshotSources {
   actsCanvas: HTMLCanvasElement;
   legend: HTMLElement;
   filename: string;
+  durationSeconds: number;
 }
 
 /** Renders the current view to a canvas at up to 2x device pixel ratio. */
@@ -231,14 +241,29 @@ export function renderScreenshot(src: ScreenshotSources): HTMLCanvasElement {
   ctx.stroke();
 
   ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  const cy = footerTop + FOOTER_H / 2;
+
+  const wordmark = 'buzzdetect live!';
+  ctx.font = `bold 10px ${MONO}`;
+  const wordmarkWidth = ctx.measureText(wordmark).width;
+  const gradient = ctx.createLinearGradient(PAD, 0, PAD + wordmarkWidth, 0);
+  for (const [stop, color] of WORDMARK_STOPS) gradient.addColorStop(stop, color);
+  ctx.fillStyle = gradient;
+  ctx.fillText(wordmark, PAD, cy);
+
   ctx.font = `10px ${MONO}`;
   ctx.fillStyle = MUTED;
-  ctx.textAlign = 'left';
-  const left1 = 'buzzdetect live! — lukehearon.com/buzzdetect-live';
-  const cy = footerTop + FOOTER_H / 2;
-  ctx.fillText(left1, PAD, cy);
+  const rest = ' — lukehearon.com/buzzdetect-live';
+  ctx.fillText(rest, PAD + wordmarkWidth, cy);
+  let x = PAD + wordmarkWidth + ctx.measureText(rest).width;
   if (src.filename) {
-    ctx.fillText(` — ${src.filename}`, PAD + ctx.measureText(left1).width, cy);
+    const withFilename = ` — ${src.filename}`;
+    ctx.fillText(withFilename, x, cy);
+    x += ctx.measureText(withFilename).width;
+  }
+  if (src.durationSeconds > 0) {
+    ctx.fillText(` (${src.durationSeconds.toFixed(0)}s)`, x, cy);
   }
   ctx.textAlign = 'right';
   ctx.fillText(new Date().toLocaleString(), width - PAD, cy);
