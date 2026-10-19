@@ -19,7 +19,8 @@
       td.name, th.name { text-align: left; }
       .pass { color: #95d5b2; }
       .fail { color: #ff8f8f; }
-      #summary { margin-top: 16px; font-size: 14px; }
+      h2 { font-size: 14px; margin: 24px 0 0; }
+      .summary { margin-top: 8px; }
       pre { color: #868d99; }
     </style>
   </head>
@@ -27,11 +28,12 @@
     <h1>buzzdetect live — parity check</h1>
     <p class="lede">
       Runs the shipped sample through the app's real pipeline — browser decode,
-      the TypeScript log-mel front end, the quantised ONNX model — and compares
-      every activation against the values buzzdetect's TensorFlow SavedModels
-      produced for the same audio. The clip is 32-bit float 16&nbsp;kHz mono, the
-      exact array buzzdetect fed its embedder, so decoding introduces no
-      difference of its own and what is measured here is the model export.
+      the app's batching, buzzdetect's own ONNX graphs on this browser's wasm
+      runtime — and compares every activation, for every model, against the
+      values buzzdetect's engine produced for the same audio. The clip is 32-bit
+      float 16&nbsp;kHz mono, the exact array buzzdetect was given, so decoding
+      introduces no difference of its own and what is measured here is the
+      runtime and the framing.
     </p>
     <div id="out"><p>Running…</p></div>
     <script type="module" src="/src/parity.ts"></script>

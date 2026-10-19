@@ -5,7 +5,7 @@ A playground for quickly running buzzdetect from your browser!
 
 This is only a playground, I strongly recommend that you use [the real buzzdetect](https://github.com/OSU-Bee-Lab/buzzdetect) for real analyses. At the very least because I don't have a button to export results from the playground...
 
-Currently, this runs a lightly quantized version of `yamnet_large_general`. Results should be pretty much numerically identical to the real deal. This model is experimental and hasn't been fully tested yet -- only a curated subset of its classes is offered, and its default threshold is a starting point rather than a settled number.
+This runs buzzdetect's own released models, `fast_v1`, `balanced_v1` and `heavy_v1`, picked from the dropdown beside the Neurons button. They're the same ONNX files the desktop app runs, unmodified, so results match buzzdetect to float32 noise (worst case under 3e-6 on the demo clip). Every neuron's suggested threshold is 0, because buzzdetect-training shifts each model's outputs so that it is.
 
 ## What it do
 
@@ -21,24 +21,33 @@ npm run dev      # http://localhost:5180
 npm test         # parity against buzzdetect's own numbers
 ```
 
-## How the model was built
+## Where the models come from
 This part was written by Claude. Here it is for good ol' posterity.
 
-`tools/` runs in order. Steps 1, 2, 6 and 7 need the `buzzdetect` conda env and must run from the buzzdetect repo root; steps 3–5 need only `tools/.venv` (numpy, onnx, onnxruntime).
+buzzdetect's models are single ONNX graphs, waveform in and activations out,
+with the log-mel front end, the trunk and the head fused by buzzdetect-training's
+export. Nothing is built here. `tools/models.py` copies each model's `model.onnx`
+and `config_model.json` into `public/model/<name>/` after checking both against
+the sha256 in buzzdetect's `models.json`. It also writes
+`public/sample/testbuzz.reference.json`, which holds buzzdetect's own `OnnxModel`
+output for the demo clip and is what both parity checks compare against.
 
-|  |  |
-|------------------------------------|------------------------------------|
-| `01_reference.py` | ground truth: runs real audio through buzzdetect's own path (`--model`, default `yamnet_large_general`) and saves waveform, log-mel, embeddings and activations. For a `yamnet_k2`-embedder model this also asserts `yamnet.keras` matches the `yamnet_k2` SavedModel (5.7e-6) — the export is invalid otherwise; `yamnet_large_general` uses `yamnet.keras` directly, so there's nothing to cross-check. |
-| `02_extract_weights.py` | pulls raw layer weights to `.npz` + a JSON spec (`--model`, same default). No arithmetic. |
-| `03_build_onnx.py` | builds the single graph: YAMNet's conv stack with the head's dense layer fused on. Folds BatchNorm, resolves TF `SAME` padding to explicit pads, applies the storage precision. |
-| `04_verify_onnx.py` | ONNX vs SavedModel on identical patches. |
-| `05_detections.py` | detection-count agreement at a threshold — flips, not just totals. |
-| `06_fixtures.py` | binary fixtures for the TypeScript tests. |
-| `07_sample.py` | the shipped demo clip and its reference activations. |
+Run it with the buzzdetect engine's own venv, from the engine directory:
 
-Rebuild the model with:
-
-```         
-tools/.venv/bin/python tools/03_build_onnx.py --precision mixed --mixed-from 4 --out buzzdetect_v3.onnx
-cp tools/artifacts/buzzdetect_v3.onnx public/model/
 ```
+cd ~/Documents/bioacoustics/buzzdetect/engine
+.venv/bin/python ~/Tools/buzzdetect-live/tools/models.py
+```
+
+The fp32 graphs are shipped rather than the `model.fp16.onnx` siblings. The fp16
+files are half the download, but buzzdetect documents them as about 2e-2 off,
+so `heavy_v1` is 21 MB. It's only downloaded when you pick it.
+
+Each inference batch is given one spare frame of look-ahead audio. `heavy_v1`'s
+activation for a frame depends on audio past the frame's own end. Without that
+spare frame, the last frame of every batch would be computed against padding
+and move by up to 0.5. With it, any batch size agrees with running the whole
+file at once. buzzdetect's engine now does the same at its own chunk seams.
+Releases up to 2.1.0 scored each chunk's last frame against zeros, so those
+frames (one every chunklength seconds) are where results from those versions
+differ. At the end of a file both pad with zeros and agree.

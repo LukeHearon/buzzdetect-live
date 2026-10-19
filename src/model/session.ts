@@ -1,14 +1,14 @@
 /**
- * Loading and running buzzdetect_v3.onnx.
+ * Loading and running buzzdetect's models.
  *
- * The graph is YAMNet's convolution stack with the yamnet_large_general dense
- * head fused onto it, taking log-mel patches and returning one activation per
- * class. See tools/03_build_onnx.py for how it is built and what was traded
- * away.
+ * Each graph is the whole of a buzzdetect model -- log-mel front end, trunk and
+ * classifier head, fused by buzzdetect-training's export -- taking raw 16 kHz
+ * samples and returning one row of activations per 0.96 s frame. These are
+ * buzzdetect's released files, unchanged; see tools/models.py.
  *
- * yamnet_large_general is experimental: it hasn't been validated as
- * thoroughly as buzzdetect's earlier models. See DEFAULT_THRESHOLD's note in
- * ui/series.ts and the caveat surfaced in the help dialog.
+ * The full-precision graphs are shipped rather than buzzdetect's fp16
+ * siblings, which halve the download but move predictions by ~2e-2. heavy_v1 is
+ * the cost of that choice at 21 MB; it is only fetched when picked.
  */
 
 import * as ort from 'onnxruntime-web/wasm';
@@ -18,58 +18,19 @@ import * as ort from 'onnxruntime-web/wasm';
 // installed onnxruntime-web rather than a copy that can drift.
 import runtimeMjsUrl from '../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs?url';
 import runtimeWasmUrl from '../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm?url';
-import { PATCH_FRAMES, MEL_BANDS, PATCH_VALUES } from '../dsp/melspec';
+import { batchSamples, fillBatch, type ModelConfig } from './framing';
+import { fetchConfig, modelUrl, type ModelName } from './models';
 
 /**
- * The model and the runtime wasm live in public/ and are fetched at runtime
- * rather than imported, so the bundler never inlines 6.5 MB of weights into a
- * JS chunk and the browser can cache them separately from the code.
+ * Frames per inference call.
  *
- * Resolved against the deployment base rather than the document, because this
- * module is loaded inside a worker where `document` does not exist.
+ * Bigger batches amortise call overhead and the spare look-ahead frame each
+ * one carries (see batchSamples), but bound how long the worker is
+ * unresponsive between progress messages. At 32 the input is half a million
+ * samples, 2 MB; heavy_v1 takes a few hundred milliseconds over it on one
+ * thread.
  */
-const BASE = new URL(import.meta.env.BASE_URL, self.location.href);
-
-export const MODEL_URL = new URL('model/buzzdetect_v3.onnx', BASE);
-
-/**
- * Class order of the model's output. Fixed by config_model.json in
- * models/yamnet_large_general -- the head's columns are in this order and
- * nothing in the file records it, so it has to be mirrored here. Only a
- * subset is surfaced in the UI; see DISPLAY_ORDER in ui/series.ts.
- */
-export const CLASSES = [
-  'ambient_background',
-  'ambient_music',
-  'ambient_noise',
-  'ambient_rain',
-  'ambient_ringing',
-  'animal',
-  'human',
-  'ins_buzz',
-  'ins_trill',
-  'mech_ac',
-  'mech_auto',
-  'mech_beep',
-  'mech_hum',
-  'mech_hum_chainsaw',
-  'mech_plane',
-  'mech_tool',
-  'static',
-] as const;
-
-export const BUZZ_INDEX = CLASSES.indexOf('ins_buzz');
-
-/**
- * Patches per inference call.
- *
- * Bigger batches amortise call overhead but hold more activations live: at 32,
- * the input tensor is 32 * 96 * 64 * 4 = 786 kB, which stays comfortably inside
- * a laptop's cache budget while still giving the runtime enough work to keep
- * its threads busy. It also bounds how long the worker is unresponsive between
- * progress messages.
- */
-export const BATCH_PATCHES = 32;
+export const BATCH_FRAMES = 32;
 
 let configured = false;
 
@@ -115,7 +76,9 @@ function configure(): void {
 }
 
 export interface LoadedModel {
+  name: ModelName;
   session: ort.InferenceSession;
+  config: ModelConfig;
   /** True when the runtime was able to use more than one thread. */
   threaded: boolean;
   threads: number;
@@ -184,11 +147,12 @@ function explainRuntimeFailure(err: unknown, log: FetchRecord[]): Error {
   return new Error(`The model could not be started: ${detail}`);
 }
 
-export async function loadModel(url: string | URL = MODEL_URL): Promise<LoadedModel> {
+export async function loadModel(name: ModelName): Promise<LoadedModel> {
   configure();
-  const response = await fetch(url);
+  const url = modelUrl(name, 'model.onnx');
+  const [config, response] = await Promise.all([fetchConfig(name), fetch(url)]);
   if (!response.ok) {
-    throw new Error(`Could not download the model: ${url} returned HTTP ${response.status}.`);
+    throw new Error(`Could not download ${name}: ${url} returned HTTP ${response.status}.`);
   }
   const bytes = await response.arrayBuffer();
 
@@ -196,31 +160,41 @@ export async function loadModel(url: string | URL = MODEL_URL): Promise<LoadedMo
     ort.InferenceSession.create(bytes, {
       executionProviders: ['wasm'],
       graphOptimizationLevel: 'all',
-      // The graph has a dynamic batch dimension but is otherwise fully static, so
-      // the runtime can plan its allocations once and reuse them.
+      // Every call is the same BATCH_FRAMES-sized input (the last one padded),
+      // so the runtime can plan its allocations once and reuse them.
       enableMemPattern: true,
     }),
   );
   if (!session) throw explainRuntimeFailure(err, log);
 
   const threads = ort.env.wasm.numThreads ?? 1;
-  return { session, threaded: threads > 1, threads, bytes: bytes.byteLength };
+  return { name, session, config, threaded: threads > 1, threads, bytes: bytes.byteLength };
 }
 
 /**
- * Runs one batch of patches.
+ * Runs frames [first, first + count) of `wav`, `count` at most `capacity`.
  *
- * `patches` must hold `count * PATCH_VALUES` floats. Returns activations laid
- * out as `[count, CLASSES.length]`, row-major.
+ * `scratch` is the input buffer, batchSamples(config, capacity) long, reused
+ * across calls; the input is always that full length, zero-padded, so every
+ * call has the same shape. Returns activations laid out as
+ * `[count, classes.length]`, row-major, as a copy -- ORT reuses its output
+ * buffer between runs.
  */
-export async function runBatch(
-  session: ort.InferenceSession,
-  patches: Float32Array,
+export async function runFrames(
+  model: LoadedModel,
+  wav: Float32Array,
+  first: number,
   count: number,
+  scratch: Float32Array,
 ): Promise<Float32Array> {
-  const expected = count * PATCH_VALUES;
-  const input = patches.length === expected ? patches : patches.subarray(0, expected);
-  const tensor = new ort.Tensor('float32', input, [count, PATCH_FRAMES, MEL_BANDS]);
-  const out = await session.run({ patches: tensor });
-  return out.activations.data as Float32Array;
+  fillBatch(model.config, wav, first, scratch);
+  const tensor = new ort.Tensor('float32', scratch, [scratch.length]);
+  const out = await model.session.run({ waveform: tensor });
+  const data = out.predictions.data as Float32Array;
+  return data.slice(0, count * model.config.classes.length);
+}
+
+/** A scratch input buffer for runFrames, holding up to `capacity` frames. */
+export function scratchFor(model: LoadedModel, capacity: number): Float32Array {
+  return new Float32Array(batchSamples(model.config, capacity));
 }

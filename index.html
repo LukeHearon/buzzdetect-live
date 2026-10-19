@@ -125,12 +125,14 @@
     <dialog id="help-dialog" class="help">
       <h2>buzzdetect live!</h2>
       <p>
-        Runs a compressed version of buzzdetect's <code>yamnet_large_general</code> model on audio.
+        Runs buzzdetect's models on audio, the same files the desktop app uses.
         All processing happens locally on your browser; audio isn't uploaded.
       </p>
       <p>
-        <strong>Note:</strong> <code>yamnet_large_general</code> is an experimental model that hasn't
-        been fully tested yet. Treat its results, including the ins_buzz threshold below, as provisional.
+        Pick a model beside the <strong>Neurons</strong> button.
+        <code>fast_v1</code> is quickest but most prone to false positives;
+        <code>heavy_v1</code> is slowest, the most resistant to false positives, and offers the most neurons (it's a 21 MB download);
+        <code>balanced_v1</code> sits between them.
       </p>
 
       <h3>Getting audio in</h3>
@@ -163,7 +165,8 @@
           The <strong>Neurons</strong> button lets you pick what neurons you want to plot.
           Note! We only tune buzzdetect for performance on the ins_buzz neuron, but you may find the others informative.
           You can set a detection threshold for each - a level above which you want to consider the frame positive for the event in question.
-          Our baseline threshold for the ins_buzz neuron is -0.75
+          Each model's output is shifted so that our suggested threshold is 0 for every neuron.
+          For ins_buzz, that's the point where detections were 95% precise in our validation data; the other neurons' suggestions are rougher.
         </li>
       </ul>
 
@@ -175,9 +178,9 @@
     <dialog id="settings-dialog" class="help settings">
       <h2>Neurons</h2>
       <p class="muted small">
-        Pick which neurons you want to plot and set a detection threshold foeach.
-        These come from an experimental model that hasn't been fully tested yet.
+        Pick which neurons you want to plot and set a detection threshold for each.
       </p>
+      <p id="model-description" class="muted small"></p>
       <div id="class-list" class="class-list"></div>
       <form method="dialog"><button class="button" type="submit">Done</button></form>
     </dialog>
@@ -245,6 +248,11 @@
             <svg class="icon" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>
             <span>Neurons</span>
           </button>
+          <!-- Options are filled in main.ts from MODEL_NAMES. -->
+          <label class="inline small" title="Which buzzdetect model to run">
+            <span>Model</span>
+            <select id="model"></select>
+          </label>
           <span class="grow"></span>
           <span id="detection-count" class="mono small muted"></span>
         </div>

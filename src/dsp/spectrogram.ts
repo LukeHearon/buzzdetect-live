@@ -20,7 +20,18 @@
  */
 
 import { RealFft, hannPeriodic } from './fft';
-import { hertzToMel, melToHertz } from './melspec';
+
+const MEL_BREAK_FREQUENCY_HZ = 700.0;
+const MEL_HIGH_FREQUENCY_Q = 1127.0;
+
+/** HTK mel scale, the one YAMNet's front end uses; here only to space display bands. */
+export function hertzToMel(hz: number): number {
+  return MEL_HIGH_FREQUENCY_Q * Math.log(1.0 + hz / MEL_BREAK_FREQUENCY_HZ);
+}
+
+export function melToHertz(mel: number): number {
+  return MEL_BREAK_FREQUENCY_HZ * (Math.exp(mel / MEL_HIGH_FREQUENCY_Q) - 1);
+}
 
 /** dBFS mapped to byte 0. Anything quieter clamps to 0. */
 export const DB_FLOOR = -120;
@@ -70,7 +81,7 @@ export interface MelBank {
 /**
  * Triangular mel filterbank over the full 0..Nyquist range.
  *
- * Same construction as YAMNet's (see dsp/melspec.ts) but sized for display and
+ * Same construction as YAMNet's (HTK mel, triangular bands) but sized for display and
  * spanning everything the file can represent, so the visible window can be
  * changed without rebuilding.
  */

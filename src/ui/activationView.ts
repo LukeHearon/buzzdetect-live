@@ -4,7 +4,7 @@
  * hollow where it does not, with the frame boundaries hashed in behind and a
  * dashed threshold line in the series colour.
  *
- * Any subset of the model's thirteen outputs can be plotted at once, each with
+ * Any subset of the model's outputs can be plotted at once, each with
  * its own colour and its own threshold (see ui/series.ts). They share one value
  * axis, because they are all in the same units and the interesting comparison is
  * which class is loudest at a moment -- separate axes would make that a
@@ -22,7 +22,6 @@
  */
 
 import { Viewport } from './viewport';
-import { CLASSES } from '../model/session';
 import type { Series } from './series';
 
 /** Vertical breathing room so dots at the extremes are not clipped. */
@@ -48,7 +47,7 @@ export const PANEL_BG = '#0b1220';
 const DETECTED_BG = '#16213a';
 
 /**
- * Activations as they arrive, indexed [patch * CLASSES.length + class].
+ * Activations as they arrive, indexed [patch * classCount + class].
  *
  * `offset` is the absolute index of patch 0 in this buffer. It stays 0 for a
  * file; the live scope advances it when it drops old history, so callers can
@@ -62,36 +61,39 @@ export class ActivationStore {
   total = 0;
   offset = 0;
   patchHopSeconds = 0.96;
+  /** Columns per patch: the current model's class count. */
+  classCount = 0;
 
-  reset(total: number, patchHopSeconds: number): void {
-    this.values = new Float32Array(total * CLASSES.length);
+  reset(total: number, patchHopSeconds: number, classCount: number): void {
+    this.values = new Float32Array(total * classCount);
     this.filled = 0;
     this.total = total;
     this.offset = 0;
     this.patchHopSeconds = patchHopSeconds;
+    this.classCount = classCount;
   }
 
   /** Stores a run of activations beginning at absolute patch index `firstPatch`. */
   put(firstPatch: number, activations: Float32Array): void {
     const local = firstPatch - this.offset;
     if (local < 0) return;
-    const count = activations.length / CLASSES.length;
+    const count = activations.length / this.classCount;
     if (local + count > this.total) return;
-    this.values.set(activations, local * CLASSES.length);
+    this.values.set(activations, local * this.classCount);
     this.filled = Math.max(this.filled, local + count);
   }
 
   /** Drops the oldest `patches`, sliding the rest down. */
   dropOldest(patches: number): void {
     const n = Math.min(patches, this.filled);
-    this.values.copyWithin(0, n * CLASSES.length, this.filled * CLASSES.length);
+    this.values.copyWithin(0, n * this.classCount, this.filled * this.classCount);
     this.filled -= n;
     this.offset += n;
   }
 
   /** Value at a LOCAL patch index. */
   get(patch: number, classIndex: number): number {
-    return this.values[patch * CLASSES.length + classIndex];
+    return this.values[patch * this.classCount + classIndex];
   }
 
   /** Start time of a local patch -- the timestamp in buzzdetect's `start` column. */

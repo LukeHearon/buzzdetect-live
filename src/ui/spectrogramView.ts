@@ -17,8 +17,14 @@
  * and the gesture stutters on a slow machine.
  */
 
-import { bandForHz, DB_CEIL, DB_FLOOR, type SpectrogramData } from '../dsp/spectrogram';
-import { hertzToMel, melToHertz } from '../dsp/melspec';
+import {
+  bandForHz,
+  hertzToMel,
+  melToHertz,
+  DB_CEIL,
+  DB_FLOOR,
+  type SpectrogramData,
+} from '../dsp/spectrogram';
 import { colormap, levelTable, type ColormapName } from './colormap';
 import { Viewport, type Selection } from './viewport';
 

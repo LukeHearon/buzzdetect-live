@@ -80,6 +80,8 @@ export interface ScreenshotSources {
   actsAxis: HTMLCanvasElement;
   actsCanvas: HTMLCanvasElement;
   legend: HTMLElement;
+  /** The model the results came from; they mean nothing without it. */
+  model: string;
   filename: string;
   durationSeconds: number;
 }
@@ -229,8 +231,8 @@ export function renderScreenshot(src: ScreenshotSources): HTMLCanvasElement {
     }
   }
 
-  // Footer banner: attribution, site link and filename on one line, all in the
-  // same muted weight; the timestamp sits across from them.
+  // Footer banner: attribution, site link, model and filename on one line, all
+  // in the same muted weight; the timestamp sits across from them.
   const footerTop = height - FOOTER_H;
   ctx.fillStyle = PANEL;
   ctx.fillRect(0, footerTop, width, FOOTER_H);
@@ -257,6 +259,9 @@ export function renderScreenshot(src: ScreenshotSources): HTMLCanvasElement {
   const rest = ' — lukehearon.com/buzzdetect-live';
   ctx.fillText(rest, PAD + wordmarkWidth, cy);
   let x = PAD + wordmarkWidth + ctx.measureText(rest).width;
+  const withModel = ` — ${src.model}`;
+  ctx.fillText(withModel, x, cy);
+  x += ctx.measureText(withModel).width;
   if (src.filename) {
     const withFilename = ` — ${src.filename}`;
     ctx.fillText(withFilename, x, cy);

@@ -19,7 +19,8 @@ import { decodeForAnalysis, encodeWav, LONG_FILE_SECONDS } from './audio/decode'
 import { Player, sliderToGain, gainToSlider } from './audio/player';
 import { SpectrogramView } from './ui/spectrogramView';
 import { ActivationStore, ActivationView } from './ui/activationView';
-import { SERIES, enabledSeries, type Series } from './ui/series';
+import { SERIES, enabledSeries, setEnabled, setModelClasses, type Series } from './ui/series';
+import { MODEL_NAMES, DEFAULT_MODEL, fetchConfig, type ModelName } from './model/models';
 import { formatTimeShort, normalizeSelection, type Selection } from './ui/viewport';
 import { LiveSession, LIVE_STORE_PATCHES } from './live/liveSession';
 import { createDualRange } from './ui/rangeSlider';
@@ -53,6 +54,8 @@ const els = {
   detectionCount: $('detection-count'),
   settings: $<HTMLButtonElement>('settings'),
   settingsDialog: $<HTMLDialogElement>('settings-dialog'),
+  model: $<HTMLSelectElement>('model'),
+  modelDescription: $('model-description'),
   classList: $('class-list'),
   legend: $('legend'),
   screenshot: $<HTMLButtonElement>('screenshot'),
@@ -76,11 +79,18 @@ const store = new ActivationStore();
 const player = new Player();
 
 /**
- * The classes currently plotted. All thirteen are always computed -- the model
- * emits them in one pass whatever is shown -- so switching one on costs a
+ * The classes currently plotted. Every class the model has is always computed
+ * -- it emits them in one pass whatever is shown -- so switching one on costs a
  * redraw and nothing else.
  */
 let shown: Series[] = enabledSeries();
+
+/** The model picked, and the one whose results are on screen once it reports ready. */
+let modelName: ModelName = DEFAULT_MODEL;
+/** Output columns of the loaded model; 0 until the first one is ready. */
+let classCount = 0;
+/** Model descriptions from each config_model.json, for the picker and the Neurons dialog. */
+const descriptions = new Map<ModelName, string>();
 
 let mediaUrl: string | null = null;
 let hasAudio = false;
@@ -97,6 +107,9 @@ let actsDirty = true;
 const worker = new Worker(new URL('./workers/analysis.worker.ts', import.meta.url), {
   type: 'module',
 });
+// Right away, so the download and the wasm compile overlap with the user
+// finding a file to open.
+worker.postMessage({ type: 'model', name: modelName });
 
 function setStatus(text: string, kind: '' | 'busy' | 'error' = ''): void {
   els.status.textContent = text;
@@ -110,7 +123,11 @@ worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
   switch (msg.type) {
     case 'ready':
       // The header starts on "Loading model…"; this is when it stops being true.
-      setStatus('');
+      applyModel(msg.model, msg.classes);
+      // With audio loaded, the worker goes straight on to re-running it.
+      if (live) setStatus('Listening…', 'busy');
+      else if (hasAudio) setStatus('Analysing…', 'busy');
+      else setStatus('');
       break;
 
     case 'spectrogram':
@@ -127,7 +144,9 @@ worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
       break;
 
     case 'results':
-      if (store.total !== msg.totalPatches) store.reset(msg.totalPatches, msg.patchHopSeconds);
+      if (store.total !== msg.totalPatches || store.classCount !== msg.classCount) {
+        store.reset(msg.totalPatches, msg.patchHopSeconds, msg.classCount);
+      }
       store.put(msg.firstPatch, msg.activations);
       autoRange();
       actsDirty = true;
@@ -137,7 +156,7 @@ worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
       const seconds = msg.elapsedMs / 1000;
       const rate = spec.viewport.duration / seconds;
       setStatus(
-        `Analyzed ${spec.viewport.duration.toFixed(0)} seconds in ${seconds.toFixed(1)}s ` +
+        `${msg.model}: analyzed ${spec.viewport.duration.toFixed(0)} seconds in ${seconds.toFixed(1)}s ` +
           `(${rate.toFixed(0)}× realtime)`,
       );
       updateDetectionCount();
@@ -145,6 +164,11 @@ worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
     }
 
     case 'live':
+      // Capture started before the first model reported ready: nothing has
+      // been stored yet, so sizing the store now loses nothing.
+      if (store.classCount !== msg.activations.length) {
+        store.reset(LIVE_STORE_PATCHES, 0.96, msg.activations.length);
+      }
       store.put(msg.patchIndex, msg.activations);
       autoRange();
       actsDirty = true;
@@ -208,7 +232,7 @@ function resetSession(): void {
   if (mediaUrl) URL.revokeObjectURL(mediaUrl);
   mediaUrl = null;
   hasAudio = false;
-  store.reset(0, 0.96);
+  store.reset(0, 0.96, classCount);
   spec.setData(null);
   selection = null;
   player.pause();
@@ -254,7 +278,7 @@ async function loadFile(file: File): Promise<void> {
     // after this point.
     const { wav, display } = decoded;
     worker.postMessage(
-      { type: 'analyze', wav, display, displayRate: decoded.displayRate, framehopProp: 1 },
+      { type: 'analyze', wav, display, displayRate: decoded.displayRate },
       display.buffer === wav.buffer ? [wav.buffer] : [wav.buffer, display.buffer],
     );
   } catch (err) {
@@ -589,7 +613,7 @@ function buildClassList(): void {
     threshold.addEventListener('click', (e) => e.stopPropagation());
 
     check.addEventListener('change', () => {
-      s.enabled = check.checked;
+      setEnabled(s, check.checked);
       seriesChanged();
     });
     threshold.addEventListener('change', () => {
@@ -678,7 +702,65 @@ function seriesChanged(): void {
 }
 
 els.settings.addEventListener('click', () => els.settingsDialog.showModal());
-buildClassList();
+
+// ---------------------------------------------------------------- model ---
+
+/**
+ * Takes on a model the worker has just loaded: its classes, a fresh store, and
+ * an axis that forgets the last model's range -- each model has its own scale,
+ * so one's extremes say nothing about another's.
+ */
+function applyModel(name: ModelName, classes: string[]): void {
+  modelName = name;
+  classCount = classes.length;
+  els.model.value = name;
+  setModelClasses(classes);
+  buildClassList();
+  updateModelDescription();
+  // Only reachable mid-capture on the first model, before anything is stored
+  // (the picker is disabled while recording).
+  store.reset(live ? LIVE_STORE_PATCHES : 0, 0.96, classCount);
+  acts.min = -4;
+  acts.max = 2;
+  seriesChanged();
+}
+
+function updateModelDescription(): void {
+  const text = descriptions.get(modelName) ?? '';
+  els.modelDescription.textContent = text ? `${modelName}: ${text}` : modelName;
+  els.model.title = text || 'Which buzzdetect model to run';
+}
+
+for (const name of MODEL_NAMES) {
+  const option = document.createElement('option');
+  option.value = name;
+  option.textContent = name;
+  els.model.append(option);
+}
+els.model.value = modelName;
+
+els.model.addEventListener('change', () => {
+  const name = els.model.value as ModelName;
+  setStatus(`Loading ${name}…`, 'busy');
+  worker.postMessage({ type: 'model', name });
+});
+
+// Descriptions only; the worker reads the configs it runs on itself. A miss
+// leaves the picker showing bare names, which is all it needs to work.
+void Promise.all(
+  MODEL_NAMES.map(async (name) => {
+    try {
+      descriptions.set(name, (await fetchConfig(name)).description ?? '');
+    } catch {
+      // Ignored: see above.
+    }
+  }),
+).then(() => {
+  for (const option of els.model.options) {
+    option.title = descriptions.get(option.value as ModelName) ?? '';
+  }
+  updateModelDescription();
+});
 
 for (const el of [els.minHz, els.maxHz]) {
   el.addEventListener('change', () => {
@@ -791,6 +873,7 @@ els.screenshot.addEventListener('click', () => {
     actsAxis: els.actsAxis,
     actsCanvas: acts.canvas,
     legend: els.legend,
+    model: modelName,
     filename: els.filename.textContent ?? '',
     durationSeconds: spec.viewport.duration,
   });
@@ -837,7 +920,7 @@ const TOUR_STEPS: TourStep[] = [
   {
     target: 'acts',
     title: 'buzzdetect results',
-    body: "Here are the buzzdetect results. Each point represents a single 'frame' of audio, 0.96 seconds long. buzzdetect outputs one score per frame. The ins_buzz neuron is what detects bee buzzing. We call detections whenever the value is above -0.75; detected frames have a solid dot and brighter backround. You can click on a frame to select just the audio in that frame.",
+    body: "Here are the buzzdetect results. Each point represents a single 'frame' of audio, 0.96 seconds long. buzzdetect outputs one score per frame. The ins_buzz neuron is what detects bee buzzing. We call detections whenever the value is above 0; detected frames have a solid dot and brighter backround. You can click on a frame to select just the audio in that frame.",
     placement: 'top',
   },
   {
@@ -864,7 +947,7 @@ const tour = new Tour(TOUR_STEPS, {
   // rather than restored -- the tour just explained ins_buzz specifically,
   // and the demo clip it loaded stays around too.
   onStart: () => {
-    for (const s of SERIES) s.enabled = s.name === 'ins_buzz';
+    for (const s of SERIES) setEnabled(s, s.name === 'ins_buzz');
     buildClassList();
     seriesChanged();
   },
@@ -1101,7 +1184,7 @@ els.mic.addEventListener('click', async () => {
 
     // The live store holds the same span of frames the spectrogram keeps, and
     // is compacted in step with it so both drop the same audio.
-    store.reset(LIVE_STORE_PATCHES, 0.96);
+    store.reset(LIVE_STORE_PATCHES, 0.96, classCount);
 
     const session = new LiveSession({
       onSamples: (samples) => {
@@ -1113,6 +1196,9 @@ els.mic.addEventListener('click', async () => {
     });
 
     live = session;
+    // The live analyzer is built on the model loaded now; a switch mid-capture
+    // would leave one series made of two models.
+    els.model.disabled = true;
     updateSourcePrompt();
     spec.setData(session.data);
     spec.viewport.duration = 0;
@@ -1153,9 +1239,18 @@ async function stopLive(): Promise<void> {
   updateSourcePrompt();
   worker.postMessage({ type: 'liveStop' });
 
+  els.model.disabled = false;
+
   const { samples, startSeconds, sampleRate } = session.takeRecording();
   const shifted = session.rebase();
   if (shifted > 0) store.offset = 0;
+  // A copy for the worker, so picking another model can re-run the recording.
+  // What is kept starts on a frame boundary (history is dropped in whole
+  // frames), so a re-run lands on the grid the live frames used.
+  if (samples.length > 0) {
+    const wav = samples.slice();
+    worker.postMessage({ type: 'adopt', wav }, [wav.buffer]);
+  }
 
   if (samples.length > 0) {
     if (mediaUrl) URL.revokeObjectURL(mediaUrl);

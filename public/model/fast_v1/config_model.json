@@ -1,0 +1,110 @@
+{
+  "description": "Extremely fast, but more prone to false positives than balanced.",
+  "classes": [
+    "ins_buzz",
+    "ambient_rain",
+    "human"
+  ],
+  "samplerate": 16000,
+  "framelength_s": 0.96,
+  "digits_time": 2,
+  "digits_results": 8,
+  "samples_hop": 15360,
+  "samples_min": 15600,
+  "samples_floor_nonzero": 15360,
+  "center_stats": {
+    "ambient_rain": {
+      "source": "cv",
+      "precision_target": 0.95,
+      "folds": 1,
+      "folds_total": 5,
+      "events": 2,
+      "events_source": "sample",
+      "frames": 4698,
+      "sensitivity": 0.981,
+      "false_positive_rate": 0.00736,
+      "precision_reached": 0.95,
+      "fold_threshold_spread": [
+        0.0,
+        0.0
+      ]
+    },
+    "human": {
+      "source": "cv",
+      "precision_target": 0.95,
+      "folds": 2,
+      "folds_total": 5,
+      "events": 6,
+      "events_source": "sample",
+      "frames": 71,
+      "sensitivity": 0.078,
+      "false_positive_rate": 0.00156,
+      "precision_reached": 0.071,
+      "fold_threshold_spread": [
+        -0.053,
+        0.053
+      ]
+    },
+    "ins_buzz": {
+      "source": "student_eval",
+      "precision_target": 0.95,
+      "folds": 5,
+      "folds_total": 5,
+      "events": 187,
+      "events_source": "sample",
+      "frames": 19766,
+      "sensitivity": 0.467,
+      "false_positive_rate": 0.00494,
+      "precision_reached": 0.951,
+      "fold_threshold_spread": [
+        -0.747,
+        0.718
+      ],
+      "sensitivity_exclquiet": 0.553,
+      "center_before": -1.076,
+      "shift": 0.571
+    }
+  },
+  "metadata": {
+    "embeddername": "distilled_student",
+    "set": "moderate",
+    "trained_date": "2026-10-01",
+    "modelname_internal": "fe_B_fast32h16_a0.50_s1_c-buzz-rain-human",
+    "branch": "worktree-fix-student-framing",
+    "teacher": "v4-ft-ps-e60-moderate",
+    "filters": [
+      16,
+      32,
+      64,
+      64,
+      128,
+      128,
+      256,
+      256,
+      256,
+      256,
+      256,
+      256,
+      512,
+      512
+    ],
+    "source_run": "fe_B_fast32h16_a0.50_s1_c-buzz-rain-human",
+    "frontend": "fast32h16",
+    "classes": [
+      "ins_buzz",
+      "ambient_rain",
+      "human"
+    ],
+    "activation_centers_applied": {
+      "ins_buzz": -0.505,
+      "ambient_rain": 1.443,
+      "human": -0.171
+    },
+    "center_sources": {
+      "ins_buzz": "student_eval",
+      "ambient_rain": "teacher",
+      "human": "teacher"
+    },
+    "note": "distilled single-pass student; activation_centers folded into the head bias"
+  }
+}

@@ -27,17 +27,19 @@ import {
   type MelBank,
   type SpectrogramData,
 } from '../dsp/spectrogram';
-import { PATCH_FRAMES, HOP_SAMPLES } from '../dsp/melspec';
 
 // Smaller than the file path's 1024 because a live column must be produced
 // every 10 ms from audio that has only just arrived; 512 keeps the window
 // inside one hop's worth of latency.
 const FFT_SIZE = 512;
-/** 10 ms, matching the model's frame rate so one patch is exactly 96 columns. */
-const HOP = HOP_SAMPLES;
+/**
+ * 10 ms, dividing every model's 15360-sample frame hop exactly, so one frame
+ * is exactly 96 columns.
+ */
+const HOP = 160;
 const SAMPLE_RATE = 16000;
 /** Columns spanned by one model frame. */
-const COLUMNS_PER_PATCH = PATCH_FRAMES;
+const COLUMNS_PER_PATCH = 96;
 /** Frames of history dropped per compaction; 156 * 0.96 s = 149.76 s. */
 const DROP_PATCHES = 156;
 const DROP_COLUMNS = DROP_PATCHES * COLUMNS_PER_PATCH;
